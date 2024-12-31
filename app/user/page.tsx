@@ -1,8 +1,13 @@
+import { UserButton } from "@clerk/nextjs";
+
 export default async function UserDashboard() {
   return (
-    <p>
-      This is the protected user dashboard restricted to users with the `user`
-      role.
-    </p>
+    <div>
+      <UserButton />
+      <p>
+        This is the protected user dashboard restricted to users with the `user`
+        role.
+      </p>
+    </div>
   );
 }
