@@ -5,7 +5,7 @@ import { UserButton } from "@clerk/nextjs";
 
 export function Sidebar() {
   return (
-    <div className="w-64 h-screen border-r border-gray-200 bg-white">
+    <div className="w-64 h-screen border-r border-gray-200 bg-white ">
       <div className="flex items-center justify-start h-20 border-b border-gray-200 mb-3 ml-4 gap-4">
         <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full">
           <Avatar className="flex items-center">
