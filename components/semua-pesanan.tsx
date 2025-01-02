@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/popover";
 import { Check, X, Edit, ChevronDown } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { ConfirmationBox } from "./confirmationBox";
 
 // // Updated sample data for orders
 // const orders = [
@@ -105,7 +106,7 @@ export function SemuaPesanan(props = { orders: [] }) {
               .sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate))
               .map((order) => (
                 <TableRow key={order._id} className="hover:bg-gray-50">
-                  <TableCell>{order._id}</TableCell>
+                  <TableCell>{order.id ? tracking.id : "Pending"}</TableCell>
                   <TableCell>{order.sender.name}</TableCell>
                   <TableCell>{order.sender.whatsapp}</TableCell>
                   <TableCell className="relative">
@@ -145,7 +146,15 @@ export function SemuaPesanan(props = { orders: [] }) {
                                   {folder.description}
                                 </span>
                               </div>
-                              <button className="text-blue-600 hover:text-blue-800 text-sm ml-7">
+                              <button
+                                className="text-blue-600 hover:text-blue-800 text-sm ml-7"
+                                onClick={() =>
+                                  window.open(
+                                    `https://drive.google.com/drive/folders/${order.mainFolderId}`,
+                                    "_blank"
+                                  )
+                                }
+                              >
                                 Open
                               </button>
                             </div>
@@ -178,15 +187,38 @@ export function SemuaPesanan(props = { orders: [] }) {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <button
-                        className="p-1 hover:bg-gray-100 rounded"
-                        onClick={}
-                      >
-                        <Check className="h-4 w-4 text-gray-600" />
-                      </button>
-                      <button className="p-1 hover:bg-gray-100 rounded">
-                        <X className="h-4 w-4 text-gray-600" />
-                      </button>
+                      <div>
+                        <ConfirmationBox
+                          button={
+                            <button
+                              className="p-1 hover:bg-gray-100 rounded"
+                              // onClick={() => handleOnClickTerima(order)}
+                            >
+                              <Check className="h-4 w-4 text-gray-600" />
+                            </button>
+                          }
+                          order={order}
+                          description={
+                            "Select a worker and add a description. Click send when you're done."
+                          }
+                          text={"Terima"}
+                          buttonText={"kirim"}
+                        />
+                      </div>
+                      <div>
+                        <ConfirmationBox
+                          button={
+                            <button className="p-1 hover:bg-gray-100 rounded">
+                              <X className="h-4 w-4 text-gray-600" />
+                            </button>
+                          }
+                          order={order}
+                          description="Are you sure you want to reject this order?"
+                          text={"Reject"}
+                          buttonText="Reject"
+                        />
+                      </div>
+
                       <button className="p-1 hover:bg-gray-100 rounded">
                         <Edit className="h-4 w-4 text-gray-600" />
                       </button>
