@@ -5,6 +5,7 @@ import { SemuaPesanan } from "@/components/semua-pesanan";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
+  const [users, setUsers] = useState([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -15,7 +16,7 @@ export default function OrdersPage() {
         .then((data) => {
           // Filter orders to display only pending ones
           const pendingOrders = data.filter(
-            (order) =>
+            (order: { status: string }) =>
               order.status === "pending" ||
               order.status === "new" ||
               order.status === "on-process" ||
@@ -28,7 +29,19 @@ export default function OrdersPage() {
         });
     };
 
+    const fetchUser = async () => {
+      try {
+        const res = await fetch(
+          "https://jovanalbum-system-backend.onrender.com/user"
+        );
+        const data = await res.json();
+        setUsers(data);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+      }
+    };
     fetchData();
+    fetchUser();
 
     //set interval
     const interval = setInterval(() => {
@@ -44,7 +57,7 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <SemuaPesanan orders={orders} />
+      <SemuaPesanan orders={orders} users={users} />
     </div>
   );
 }

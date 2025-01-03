@@ -20,26 +20,19 @@ import {
   SelectValue
 } from "@/components/ui/select";
 
-// Assume this comes from your database
-const workerNames = [
-  "John Doe",
-  "Jane Smith",
-  "Alice Johnson",
-  "Bob Williams",
-  "Charlie Brown"
-];
-
 export function ConfirmationBox(props: {
   order: [];
   button: React.ReactNode;
   description: string;
   text: string;
   buttonText: string;
+  users: { firstName: string; userId: string }[];
 }) {
   const [selectedWorker, setSelectedWorker] = useState("");
   const [description, setDescription] = useState("");
 
   const order = props.order;
+  const users: { firstName: string; userId: string }[] = props.users;
 
   const handleSend = () => {
     // Implement your send logic here
@@ -73,13 +66,13 @@ export function ConfirmationBox(props: {
                   <SelectValue placeholder="Select a worker" />
                 </SelectTrigger>
                 <SelectContent className="bg-white">
-                  {workerNames.map((name) => (
+                  {users.map((user) => (
                     <SelectItem
-                      key={name}
-                      value={name}
+                      key={user.userId}
+                      value={user.firstName}
                       className="hover:bg-gray-100"
                     >
-                      {name}
+                      {user.firstName}
                     </SelectItem>
                   ))}
                 </SelectContent>

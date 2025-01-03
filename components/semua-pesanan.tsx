@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Table,
   TableBody,
@@ -20,59 +20,64 @@ import { Check, X, Edit, ChevronDown } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ConfirmationBox } from "./confirmationBox";
 
-// // Updated sample data for orders
-// const orders = [
-//   {
-//     id: "ORD001",
-//     senderName: "John Doe",
-//     whatsappNumber: "+62123456789",
-//     folders: [
-//       { name: "Folder A", type: "Type A" },
-//       { name: "Folder B", type: "Type B" }
-//     ],
-//     orderDate: "2023-06-01",
-//     status: "Pending"
-//   },
-//   {
-//     id: "ORD002",
-//     senderName: "Jane Smith",
-//     whatsappNumber: "+62987654321",
-//     folders: [{ name: "Folder C", type: "Type A" }],
-//     orderDate: "2023-06-02",
-//     status: "Completed"
-//   },
-//   {
-//     id: "ORD003",
-//     senderName: "Bob Johnson",
-//     whatsappNumber: "+62111222333",
-//     folders: [
-//       { name: "Folder D", type: "Type C" },
-//       { name: "Folder E", type: "Type B" },
-//       { name: "Folder F", type: "Type A" }
-//     ],
-//     orderDate: "2023-06-03",
-//     status: "Pending"
-//   }
-// ];
+interface Order {
+  _id: string;
+  trackingId: string;
+  sender: {
+    name: string;
+    whatsapp: string;
+  };
+  folders: {
+    ukuran: string;
+    description: string;
+  }[];
+  mainFolderId: string;
+  uploadDate: string;
+  status: string;
+  estimatedFinish: Date;
+  workingNotes: string;
+}
 
-export function SemuaPesanan(props = { orders: [] }) {
-  const [currentOrder, setCurrentOrder] = useState(null);
-  //extract the props
-  const { orders } = props;
-  console.log(orders);
+interface User {
+  userId: string;
+  firstName: string;
+  LastName: string;
+  Orders: [];
+}
 
+export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
+  // Extract props
+  const { orders, users } = props;
+
+  // Set up state
   const [filter, setFilter] = useState("");
-  const [filteredOrders, setFilteredOrders] = useState(orders);
-  //   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>(orders);
+
+  // Update filteredOrders when props.orders changes
+  useEffect(() => {
+    setFilteredOrders(orders);
+  }, [orders]);
 
   const handleFilter = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setFilter(value);
-    const filtered = orders.filter((order) =>
-      order._id.toLowerCase().includes(value.toLowerCase())
-    );
+
+    // Filter orders with null check for trackingId
+    const filtered = orders.filter((order) => {
+      const searchTerm = value.toLowerCase();
+      const trackingId = order.trackingId
+        ? order.trackingId.toLowerCase()
+        : "pending";
+
+      return trackingId.includes(searchTerm);
+    });
+
     setFilteredOrders(filtered);
   };
+
+  //the function to handle button
+  const handleSend = (order: Order) => {};
+  const handleReject = (order: Order) => {};
 
   return (
     <div className="p-6">
@@ -92,7 +97,7 @@ export function SemuaPesanan(props = { orders: [] }) {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="font-semibold">Order ID</TableHead>
+              <TableHead className="font-semibold">Tracking ID</TableHead>
               <TableHead className="font-semibold">Name of Sender</TableHead>
               <TableHead className="font-semibold">WhatsApp Number</TableHead>
               <TableHead className="font-semibold">Number of Folders</TableHead>
@@ -102,11 +107,17 @@ export function SemuaPesanan(props = { orders: [] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders
-              .sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate))
+            {filteredOrders
+              .sort(
+                (a, b) =>
+                  new Date(b.uploadDate).getTime() -
+                  new Date(a.uploadDate).getTime()
+              )
               .map((order) => (
                 <TableRow key={order._id} className="hover:bg-gray-50">
-                  <TableCell>{order.id ? tracking.id : "Pending"}</TableCell>
+                  <TableCell>
+                    {order.trackingId ? order.trackingId : "Pending"}
+                  </TableCell>
                   <TableCell>{order.sender.name}</TableCell>
                   <TableCell>{order.sender.whatsapp}</TableCell>
                   <TableCell className="relative">
@@ -203,6 +214,7 @@ export function SemuaPesanan(props = { orders: [] }) {
                           }
                           text={"Terima"}
                           buttonText={"kirim"}
+                          users={users}
                         />
                       </div>
                       <div>
