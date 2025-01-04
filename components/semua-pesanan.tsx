@@ -57,6 +57,7 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
   useEffect(() => {
     setFilteredOrders(orders);
     console.log("Orders updated");
+    console.log(orders);
   }, [orders]);
 
   const handleFilter = (e: React.ChangeEvent<HTMLInputElement>) => {

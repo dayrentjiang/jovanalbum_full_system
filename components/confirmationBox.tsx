@@ -77,6 +77,19 @@ export function ConfirmationBox(props: {
     const trackingData = await trackingResponse.json(); // Parse the response
     console.log("Tracking created successfully:", trackingData);
 
+    //add the tracking ID to the order in the database
+    const trackingId = trackingData.trackingId; //kasih masuk ini ke database
+    const trackingOrder = await fetch(
+      "https://jovanalbum-system-backend.onrender.com/order/tracking",
+      // "http://localhost:8001/order/tracking",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: order._id, trackingId: trackingId })
+      }
+    );
+    console.log(trackingOrder);
+
     //3. send the order and description to the worker (insert into their array of orders)
     console.log("Assigning order to worker:", selectedWorker);
     if (selectedWorker) {
