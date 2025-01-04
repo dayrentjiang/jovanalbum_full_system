@@ -37,6 +37,7 @@ export default function OrdersPage() {
         const data = await res.json();
         setUsers(data);
       } catch (error) {
+        setError("Error fetching user");
         console.error("Error fetching user:", error);
       }
     };

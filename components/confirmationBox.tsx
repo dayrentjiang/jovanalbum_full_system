@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 
 export function ConfirmationBox(props: {
-  order: [];
+  order: { _id: string }[];
   button: React.ReactNode;
   description: string;
   text: string;
@@ -31,19 +31,92 @@ export function ConfirmationBox(props: {
   const [selectedWorker, setSelectedWorker] = useState("");
   const [description, setDescription] = useState("");
 
-  const order = props.order;
+  const order = props.order[0]; // Assuming order is an array with one object
   const users: { firstName: string; userId: string }[] = props.users;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     // Implement your send logic here
     console.log("Sending:", { worker: selectedWorker, description });
     console.log(order);
-    //close the dialog
-    setSelectedWorker("");
-    setDescription("");
+
+    // //flow
+    // try {
+    //1. change the status of the order to "on-process"
+    const acceptResponse = await fetch(
+      "https://jovanalbum-system-backend.onrender.com/order/accept",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(order)
+      }
+    );
+    if (!acceptResponse.ok) {
+      throw new Error("Failed to accept order");
+    }
+    const acceptData = await acceptResponse.json(); // Parse the response
+    console.log("Order accepted successfully:", acceptData);
+
+    //2. create tracking ID
+    // Then, send the POST request to create the tracking
+    const trackingResponse = await fetch(
+      "https://jovanalbum-system-backend.onrender.com/tracking/create",
+      {
+        // fetch("http://localhost:8001/tracking/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: order._id }) // Ensure _id is included
+      }
+    );
+
+    if (!trackingResponse.ok) {
+      throw new Error(`Tracking creation failed: ${trackingResponse}`);
+    }
+
+    const trackingData = await trackingResponse.json(); // Parse the response
+    console.log("Tracking created successfully:", trackingData);
+
+    //3. send the order and description to the worker (insert into their array of orders)
+    console.log("Assigning order to worker:", selectedWorker);
+    if (selectedWorker) {
+      const workerResponse = await fetch(
+        "https://jovanalbum-system-backend.onrender.com/user/order", //change to asign instead of order
+        // "http://localhost:8001/user/order", //change to asign instead of order
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            userId: selectedWorker, //ini sudah id nya
+            order: order._id,
+            workingDescription: description
+          })
+        }
+      );
+
+      if (!workerResponse.ok) {
+        throw new Error("Failed to assign order to worker");
+      }
+
+      const workerData = await workerResponse.json();
+      console.log("Order assigned to worker successfully:", workerData);
+    }
+
+    //   //4. send a notification to customer that their order is being processed (with the tracking order)
+
+    //   //close the dialog
+    //   setSelectedWorker("");
+    //   setDescription("");
+    //   //refresh the page
+    //   window.location.reload();
+    // } catch (error) {
+    //   console.error("Failed to accept order:", error);
+    // }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     console.log("Rejecting");
   };
 
@@ -69,7 +142,7 @@ export function ConfirmationBox(props: {
                   {users.map((user) => (
                     <SelectItem
                       key={user.userId}
-                      value={user.firstName}
+                      value={user.userId}
                       className="hover:bg-gray-100"
                     >
                       {user.firstName}

@@ -56,6 +56,7 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
   // Update filteredOrders when props.orders changes
   useEffect(() => {
     setFilteredOrders(orders);
+    console.log("Orders updated");
   }, [orders]);
 
   const handleFilter = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,10 +75,6 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
 
     setFilteredOrders(filtered);
   };
-
-  //the function to handle button
-  const handleSend = (order: Order) => {};
-  const handleReject = (order: Order) => {};
 
   return (
     <div className="p-6">
@@ -201,14 +198,11 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                       <div>
                         <ConfirmationBox
                           button={
-                            <button
-                              className="p-1 hover:bg-gray-100 rounded"
-                              // onClick={() => handleOnClickTerima(order)}
-                            >
+                            <button className="p-1 hover:bg-gray-100 rounded">
                               <Check className="h-4 w-4 text-gray-600" />
                             </button>
                           }
-                          order={order}
+                          order={[order]}
                           description={
                             "Select a worker and add a description. Click send when you're done."
                           }
@@ -224,10 +218,11 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                               <X className="h-4 w-4 text-gray-600" />
                             </button>
                           }
-                          order={order}
+                          order={[order]}
                           description="Are you sure you want to reject this order?"
                           text={"Reject"}
                           buttonText="Reject"
+                          users={users}
                         />
                       </div>
 
