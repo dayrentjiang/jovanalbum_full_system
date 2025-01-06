@@ -19,6 +19,7 @@ import {
 import { Check, X, Edit, ChevronDown } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ConfirmationBox } from "./confirmationBox";
+import { EditBox } from "./editBox";
 
 interface Order {
   _id: string;
@@ -30,6 +31,7 @@ interface Order {
   folders: {
     ukuran: string;
     description: string;
+    driveLink?: string;
   }[];
   mainFolderId: string;
   uploadDate: string;
@@ -157,12 +159,15 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                               </div>
                               <button
                                 className="text-blue-600 hover:text-blue-800 text-sm ml-7"
-                                onClick={() =>
-                                  window.open(
-                                    `https://drive.google.com/drive/folders/${order.mainFolderId}`,
-                                    "_blank"
-                                  )
-                                }
+                                onClick={() => {
+                                  const driveLink = folder.driveLink
+                                    ? folder.driveLink
+                                    : "https://drive.google.com/drive/folders/" +
+                                      order.mainFolderId;
+
+                                  // Open the link in a new tab
+                                  window.open(driveLink, "_blank");
+                                }}
                               >
                                 Open
                               </button>
@@ -186,7 +191,7 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                     ${
-                      order.status === "Pending"
+                      order.status === "on-process"
                         ? "bg-yellow-100 text-yellow-800"
                         : "bg-green-100 text-green-800"
                     }`}
@@ -227,9 +232,16 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                         />
                       </div>
 
-                      <button className="p-1 hover:bg-gray-100 rounded">
-                        <Edit className="h-4 w-4 text-gray-600" />
-                      </button>
+                      <div>
+                        <EditBox
+                          order={[order]}
+                          button={
+                            <button className="p-1 hover:bg-gray-100 rounded">
+                              <Edit className="h-4 w-4 text-gray-600" />
+                            </button>
+                          }
+                        />
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>

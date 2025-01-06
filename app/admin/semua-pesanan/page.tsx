@@ -47,7 +47,7 @@ export default function OrdersPage() {
     //set interval
     const interval = setInterval(() => {
       fetchData();
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, []);
