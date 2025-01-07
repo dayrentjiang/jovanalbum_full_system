@@ -62,8 +62,8 @@ export function EditBox(props: {
   const handleEdit = async () => {
     try {
       const response = await fetch(
-        // `https://jovanalbum-system-backend.onrender.com/order/update/${order._id}`,
-        `http://localhost:8001/order/update/${order._id}`,
+        `https://jovanalbum-system-backend.onrender.com/order/update/${order._id}`,
+        // `http://localhost:8001/order/update/${order._id}`,
         {
           method: "PATCH",
           headers: {
