@@ -89,7 +89,7 @@ export function EditBox(props: {
   return (
     <Dialog>
       <DialogTrigger asChild>{props.button}</DialogTrigger>
-      <DialogContent className="sm:max-w-[625px] bg-white">
+      <DialogContent className="sm:max-w-[625px] max-h-[625px] overflow-auto bg-white">
         <DialogHeader>
           <DialogTitle>Edit Order</DialogTitle>
           <DialogDescription>

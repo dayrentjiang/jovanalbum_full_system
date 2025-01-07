@@ -16,6 +16,13 @@ import {
   PopoverContent,
   PopoverTrigger
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Check, X, Edit, ChevronDown } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ConfirmationBox } from "./confirmationBox";
@@ -29,6 +36,7 @@ interface Order {
     whatsapp: string;
   };
   folders: {
+    tipe: string;
     ukuran: string;
     description: string;
     driveLink?: string;
@@ -52,43 +60,98 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
   const { orders, users } = props;
 
   // Set up state
-  const [filter, setFilter] = useState("");
+  const [filterType, setFilterType] = useState<"name" | "trackingId" | "phone">(
+    "name"
+  );
+  const [filterValue, setFilterValue] = useState("");
   const [filteredOrders, setFilteredOrders] = useState<Order[]>(orders);
+
+  // Normalize phone number by removing spaces, +, and -
+  const normalizePhoneNumber = (phone: string): string => {
+    return phone.replace(/[\s+\-]/g, "").toLowerCase();
+  };
+  const normalizeText = (text: string): string => {
+    return text.toLowerCase().trim();
+  };
 
   // Update filteredOrders when props.orders changes
   useEffect(() => {
-    setFilteredOrders(orders);
+    if (!filterValue) {
+      setFilteredOrders(orders);
+    } else {
+      // If there is an active filter, reapply it to the new orders
+      handleFilter(filterValue);
+    }
     console.log("Orders updated");
     console.log(orders);
   }, [orders]);
 
-  const handleFilter = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setFilter(value);
+  const handleFilter = (value: string) => {
+    setFilterValue(value);
 
-    // Filter orders with null check for trackingId
+    const normalizedValue = normalizeText(value);
+
     const filtered = orders.filter((order) => {
-      const searchTerm = value.toLowerCase();
-      const trackingId = order.trackingId
-        ? order.trackingId.toLowerCase()
-        : "pending";
+      switch (filterType) {
+        case "trackingId":
+          const trackingId = order.trackingId
+            ? normalizeText(order.trackingId)
+            : "pending";
+          return trackingId.includes(normalizedValue);
 
-      return trackingId.includes(searchTerm);
+        case "name":
+          const name = normalizeText(order.sender.name);
+          return name.includes(normalizedValue);
+
+        case "phone":
+          const phone = normalizePhoneNumber(order.sender.whatsapp);
+          const searchPhone = normalizePhoneNumber(value);
+          return phone.includes(searchPhone);
+
+        default:
+          return false;
+      }
     });
 
     setFilteredOrders(filtered);
+  };
+
+  // When changing filter type
+  const handleFilterTypeChange = (value: "name" | "trackingId" | "phone") => {
+    setFilterType(value);
+    if (filterValue) {
+      // Reapply the current filter value with the new type
+      handleFilter(filterValue);
+    }
   };
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-semibold mb-6">Semua Pesanan</h1>
 
-      <div className="mb-6">
+      <div className="flex gap-4 mb-6">
+        <Select value={filterType} onValueChange={handleFilterTypeChange}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by..." />
+          </SelectTrigger>
+          <SelectContent className="bg-white">
+            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="phone">Phone Number</SelectItem>
+            <SelectItem value="trackingId">Tracking ID</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Input
           type="text"
-          placeholder="Filter by Order ID"
-          value={filter}
-          onChange={handleFilter}
+          placeholder={`Filter by ${
+            filterType === "name"
+              ? "sender name"
+              : filterType === "trackingId"
+              ? "tracking ID"
+              : "phone number"
+          }`}
+          value={filterValue}
+          onChange={(e) => handleFilter(e.target.value)}
           className="max-w-sm border-gray-300"
         />
       </div>
@@ -151,7 +214,9 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                             >
                               <div className="flex flex-col">
                                 <span className="min-w-auto">
-                                  {folder.ukuran}
+                                  {folder.tipe
+                                    ? folder.tipe + "-" + folder.ukuran
+                                    : folder.ukuran}
                                 </span>
                                 <span className="text-gray-600 text-xs">
                                   {folder.description}
