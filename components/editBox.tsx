@@ -13,12 +13,19 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { MessageCircle } from "lucide-react";
 
 export function EditBox(props: {
   order: {
     _id: string;
     sender: { whatsapp: string; name: string };
-    folders: { ukuran: string; description: string }[];
+    folders: {
+      ukuran: string;
+      description: string;
+      driveLink?: string;
+      tipe?: string;
+    }[];
+    trackingId?: string;
   }[];
   button: React.ReactNode;
 }) {
@@ -28,7 +35,11 @@ export function EditBox(props: {
       name: order.sender.name,
       whatsapp: order.sender.whatsapp
     },
-    folders: order.folders
+    folders: order.folders.map((folder) => ({
+      ...folder,
+      driveLink: folder.driveLink || "",
+      tipe: folder.tipe || ""
+    }))
   });
 
   const handleInputChange = (
@@ -63,7 +74,6 @@ export function EditBox(props: {
     try {
       const response = await fetch(
         `https://jovanalbum-system-backend.onrender.com/order/update/${order._id}`,
-        // `http://localhost:8001/order/update/${order._id}`,
         {
           method: "PATCH",
           headers: {
@@ -77,13 +87,50 @@ export function EditBox(props: {
         throw new Error("Failed to update order");
       }
 
-      // Handle success (e.g., close dialog, show notification)
       console.log("Order updated successfully");
-
-      //update UI with the new data without windows refresh
     } catch (error) {
       console.error("Error updating order:", error);
     }
+  };
+
+  const handleWhatsAppResend = () => {
+    const phoneNumber = formData.sender.whatsapp.replace(/\D/g, ""); // Remove non-digits
+    const senderName = formData.sender.name;
+    const trackingId = order.trackingId || "";
+
+    // Create folders details section
+    const foldersDetails = formData.folders
+      .map((folder, index) => {
+        const folderNumber = index + 1;
+        return `Folder ${folderNumber}:
+${folder.tipe ? `tipe: ${folder.tipe}` : ""}
+ukuran: ${folder.ukuran}
+deskripsi: ${folder.description} ||`;
+      })
+      .join("\n\n");
+
+    const message = `*PESANANMU* *SUDAH* *KAMI* *TERIMA!*
+.......
+Terima kasih! pesananmu atas nama: ${senderName} telah kami terima dan akan segera di proses!
+
+__________________________
+rincian pesanan:
+
+${foldersDetails}
+__________________________
+
+nomor order: *${trackingId}*
+Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
+.......
+* Jovan Album *`;
+
+    const encodedMessage = encodeURIComponent(message);
+
+    window.open(
+      `https://wa.me/${phoneNumber}?text=${encodedMessage}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
   };
 
   return (
@@ -100,7 +147,17 @@ export function EditBox(props: {
         <div className="grid gap-4 py-4">
           {/* Sender Information */}
           <div className="grid gap-2">
-            <h3 className="font-semibold">Sender Information</h3>
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold">Sender Information</h3>
+              <Button
+                type="button"
+                onClick={handleWhatsAppResend}
+                className="bg-green-500 hover:bg-green-600 flex items-center gap-2"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Resend WhatsApp
+              </Button>
+            </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">
                 Name
@@ -134,6 +191,18 @@ export function EditBox(props: {
               <div key={index} className="grid gap-2 border p-4 rounded-lg">
                 <h4 className="font-medium">Folder {index + 1}</h4>
                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor={`tipe-${index}`} className="text-right">
+                    Type
+                  </Label>
+                  <Input
+                    id={`tipe-${index}`}
+                    name="tipe"
+                    value={folder.tipe}
+                    onChange={(e) => handleInputChange(e, "folders", index)}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor={`ukuran-${index}`} className="text-right">
                     Size
                   </Label>
@@ -158,6 +227,19 @@ export function EditBox(props: {
                     value={folder.description}
                     onChange={(e) => handleInputChange(e, "folders", index)}
                     className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor={`driveLink-${index}`} className="text-right">
+                    Drive Link
+                  </Label>
+                  <Input
+                    id={`driveLink-${index}`}
+                    name="driveLink"
+                    value={folder.driveLink}
+                    onChange={(e) => handleInputChange(e, "folders", index)}
+                    className="col-span-3"
+                    placeholder="Enter Google Drive link"
                   />
                 </div>
               </div>
