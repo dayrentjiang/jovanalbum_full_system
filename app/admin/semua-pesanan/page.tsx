@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SemuaPesanan } from "@/components/semua-pesanan";
+import { SemuaPesanan } from "@/components/admin-ui/semua-pesanan";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -47,7 +47,7 @@ export default function OrdersPage() {
     //set interval
     const interval = setInterval(() => {
       fetchData();
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, []);

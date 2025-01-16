@@ -23,10 +23,11 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Check, X, Edit, ChevronDown } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { Check, X, Edit, ChevronDown, Link } from "lucide-react";
+import { format } from "date-fns";
 import { ConfirmationBox } from "./confirmationBox";
 import { EditBox } from "./editBox";
+import { EstimatedDeliveryBox } from "./estimatedFinishBox";
 
 interface Order {
   _id: string;
@@ -36,10 +37,17 @@ interface Order {
     whatsapp: string;
   };
   folders: {
+    _id: string;
     tipe: string;
     ukuran: string;
     description: string;
     driveLink?: string;
+    status?: string;
+    assignee?: string;
+    assigneeName?: string;
+    orderStatusNow?: [];
+    kodeOrder: string;
+    stepChecklist: string[];
   }[];
   mainFolderId: string;
   uploadDate: string;
@@ -60,9 +68,9 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
   const { orders, users } = props;
 
   // Set up state
-  const [filterType, setFilterType] = useState<"name" | "trackingId" | "phone">(
-    "name"
-  );
+  const [filterType, setFilterType] = useState<
+    "name" | "trackingId" | "phone" | "description"
+  >("name");
   const [filterValue, setFilterValue] = useState("");
   const [filteredOrders, setFilteredOrders] = useState<Order[]>(orders);
 
@@ -73,6 +81,7 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
   const normalizeText = (text: string): string => {
     return text.toLowerCase().trim();
   };
+
 
   // Update filteredOrders when props.orders changes
   useEffect(() => {
@@ -107,6 +116,10 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
           const phone = normalizePhoneNumber(order.sender.whatsapp);
           const searchPhone = normalizePhoneNumber(value);
           return phone.includes(searchPhone);
+
+        case "description":
+          const description = normalizeText(order.folders[0].description);
+          return description.includes(normalizedValue);
 
         default:
           return false;
@@ -143,6 +156,7 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
             <SelectItem value="name">Name</SelectItem>
             <SelectItem value="phone">Phone Number</SelectItem>
             <SelectItem value="trackingId">Tracking ID</SelectItem>
+            <SelectItem value="description">Description</SelectItem>
           </SelectContent>
         </Select>
 
@@ -153,7 +167,9 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
               ? "sender name"
               : filterType === "trackingId"
               ? "tracking ID"
-              : "phone number"
+              : filterType === "phone"
+              ? "phone number"
+              : "description"
           }`}
           value={filterValue}
           onChange={(e) => handleFilter(e.target.value)}
@@ -165,12 +181,15 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="font-semibold">Tracking ID</TableHead>
+              {/* <TableHead className="font-semibold">Tracking ID</TableHead> */}
+              <TableHead className="font-semibold">Date of Order</TableHead>
               <TableHead className="font-semibold">Name of Sender</TableHead>
               <TableHead className="font-semibold">WhatsApp Number</TableHead>
               <TableHead className="font-semibold">Number of Folders</TableHead>
-              <TableHead className="font-semibold">Date of Order</TableHead>
               <TableHead className="font-semibold">Order Status</TableHead>
+              <TableHead className="font-semibold">
+                Estimated Delivery
+              </TableHead>
               <TableHead className="font-semibold">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -183,8 +202,14 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
               )
               .map((order) => (
                 <TableRow key={order._id} className="hover:bg-gray-50">
-                  <TableCell>
+                  {/* <TableCell>
                     {order.trackingId ? order.trackingId : "Pending"}
+                  </TableCell> */}
+                  <TableCell>
+                    {format(
+                      new Date(order.uploadDate),
+                      "dd-MMM-yyyy | hh:mm a"
+                    )}
                   </TableCell>
                   <TableCell>{order.sender.name}</TableCell>
                   <TableCell>{order.sender.whatsapp}</TableCell>
@@ -204,6 +229,7 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                         className="w-[auto] p-0 shadow-lg"
                         align="start"
                         sideOffset={5}
+                        // alignOffset={}
                       >
                         <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
                           <h4 className="text-sm font-semibold">Folders</h4>
@@ -211,47 +237,98 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                             List of folders and their types
                           </p>
                         </div>
-                        <div className="p-2 bg-gray-50">
-                          {order.folders.map((folder, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center justify-between px-2 py-1.5"
-                            >
-                              <div className="flex flex-col">
-                                <span className="min-w-auto">
-                                  {folder.tipe
-                                    ? folder.tipe + "-" + folder.ukuran
-                                    : folder.ukuran}
-                                </span>
-                                <span className="text-gray-600 text-xs">
-                                  {folder.description}
-                                </span>
-                              </div>
-                              <button
-                                className="text-blue-600 hover:text-blue-800 text-sm ml-7"
-                                onClick={() => {
-                                  const driveLink = folder.driveLink
-                                    ? folder.driveLink
-                                    : "https://drive.google.com/drive/folders/" +
-                                      order.mainFolderId;
-
-                                  // Open the link in a new tab
-                                  window.open(driveLink, "_blank");
-                                }}
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <div className="space-y-2">
+                            {order.folders.map((folder, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between px-4 py-2 bg-white rounded-md hover:bg-gray-50 transition-colors duration-150"
                               >
-                                {folder.driveLink ? "Drive" : "Open"}
-                              </button>
-                            </div>
-                          ))}
+                                <div className="flex flex-col flex-grow max-w-[50%]">
+                                  <span className="font-medium text-gray-900">
+                                    {folder.tipe
+                                      ? `${folder.tipe}-${folder.ukuran}`
+                                      : folder.ukuran}
+                                  </span>
+                                  <span className="text-gray-500 text-xs max-w-[50%]">
+                                    {folder.description}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-col flex-grow">
+                                  <span className="text-sm text-gray-600 min-w-[40px] ml-5">
+                                    {folder.kodeOrder
+                                      ? folder.kodeOrder
+                                      : "N/A"}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-6 ml-10">
+                                  <span
+                                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                                      folder.stepChecklist?.some((step) =>
+                                        step.includes("(done)")
+                                      )
+                                        ? folder.stepChecklist[
+                                            folder.stepChecklist.length - 1
+                                          ].includes("(done)")
+                                          ? "bg-green-100 text-green-800"
+                                          : "bg-blue-100 text-blue-800"
+                                        : "bg-gray-100 text-gray-800"
+                                    }`}
+                                  >
+                                    {folder.stepChecklist?.find((step) =>
+                                      step.includes("(done)")
+                                    )
+                                      ? folder.stepChecklist
+                                          .filter((step) =>
+                                            step.includes("(done)")
+                                          )
+                                          .pop()
+                                          ?.replace(" (done)", "")
+                                      : "Pending"}
+                                  </span>
+                                  <span className="text-sm text-gray-600 min-w-[100px] ml-5">
+                                    {folder.assigneeName || "Belum"}
+                                  </span>
+
+                                  <button
+                                    onClick={() => {
+                                      if (folder.driveLink) {
+                                        // Open both the specific folder and main folder
+                                        window.open(
+                                          folder.driveLink,
+                                          "_blank",
+                                          "noopener,noreferrer"
+                                        );
+                                        window.open(
+                                          `https://drive.google.com/drive/folders/${order.mainFolderId}`,
+                                          "_blank",
+                                          "noopener,noreferrer"
+                                        );
+                                      } else {
+                                        // Only open main folder
+                                        window.open(
+                                          `https://drive.google.com/drive/folders/${order.mainFolderId}`,
+                                          "_blank",
+                                          "noopener,noreferrer"
+                                        );
+                                      }
+                                    }}
+                                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors ml-4"
+                                  >
+                                    <Link size={14} className="inline" />
+                                    <span>
+                                      {folder.driveLink ? "Drive (2)" : "Open"}
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </PopoverContent>
                     </Popover>
-                  </TableCell>
-                  <TableCell>
-                    {format(
-                      new Date(order.uploadDate),
-                      "dd-MMM-yyyy | hh:mm a"
-                    )}
                   </TableCell>
                   <TableCell>
                     <span
@@ -264,23 +341,43 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                     </span>
                   </TableCell>
                   <TableCell>
+                    <EstimatedDeliveryBox
+                      orderId={order._id}
+                      button={
+                        <button className="p-1 hover:bg-gray-100 rounded text-blue-800">
+                          {order.estimatedFinish ? (
+                            format(
+                              new Date(order.estimatedFinish),
+                              "dd-MMM-yyyy"
+                            )
+                          ) : (
+                            <p className="text-gray-800">Set Delivery Date</p>
+                          )}
+                        </button>
+                      }
+                    />
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-2">
-                      <div>
-                        <ConfirmationBox
-                          button={
-                            <button className="p-1 hover:bg-gray-100 rounded">
-                              <Check className="h-4 w-4 text-gray-600" />
-                            </button>
-                          }
-                          order={[order]}
-                          description={
-                            "Select a worker and add a description. Click send when you're done."
-                          }
-                          text={"Terima"}
-                          buttonText={"kirim"}
-                          users={users}
-                        />
-                      </div>
+                      {order.status === "new" ? (
+                        <div>
+                          <ConfirmationBox
+                            button={
+                              <button className="p-1 hover:bg-gray-100 rounded">
+                                <Check className="h-4 w-4 text-gray-600" />
+                              </button>
+                            }
+                            order={[order]}
+                            description={
+                              "Select a worker and add a description. Click send when you're done."
+                            }
+                            text={"Terima"}
+                            buttonText={"kirim"}
+                            users={users}
+                          />
+                        </div>
+                      ) : null}
+
                       <div>
                         <ConfirmationBox
                           button={
@@ -304,6 +401,7 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                               <Edit className="h-4 w-4 text-gray-600" />
                             </button>
                           }
+                          users={users}
                         />
                       </div>
                     </div>

@@ -1,15 +1,15 @@
 import "@/app/globals.css";
 import { Inter } from "next/font/google";
-import { Sidebar } from "@/components/admin-ui/sidebar";
+import { WorkerSidebar } from "@/components/worker-ui/workerSidebar";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "Admin Dashboard",
-  description: "Admin dashboard for managing orders"
+  title: "Worker Dashboard",
+  description: "Worker dashboard for managing orders"
 };
 
-export default function AdminLayout({
+export default function WorkerLayout({
   children
 }: {
   children: React.ReactNode;
@@ -18,7 +18,7 @@ export default function AdminLayout({
     <html lang="en">
       <body className={inter.className}>
         <div className="flex h-screen bg-white">
-          <Sidebar />
+          <WorkerSidebar />
           <main className="flex-1 overflow-y-auto bg-white">{children}</main>
         </div>
       </body>
