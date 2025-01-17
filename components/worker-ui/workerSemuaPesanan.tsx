@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import WorkerConfirmationBox from "./workerConfirmationBox";
 
 interface Order {
@@ -37,6 +38,7 @@ interface Order {
     status?: string;
     assignee?: string;
     assigneeName?: string;
+    kodeOrder: string;
   }; // Changed from array to single object
   uploadDate: string;
   status: string;
@@ -48,6 +50,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const processTypes = {
     "Cetak Foto": [
@@ -241,6 +244,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
                 <TableHead className="font-semibold">Sender Name</TableHead>
                 {/* <TableHead className="font-semibold">WhatsApp</TableHead> */}
                 <TableHead className="font-semibold">Jenis</TableHead>
+                <TableHead className="font-semibold">Kode</TableHead>
                 <TableHead className="font-semibold">Description</TableHead>
                 <TableHead className="font-semibold">
                   Estimasi Selesai
@@ -262,10 +266,58 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
                   <TableCell>{`${order.folder?.tipe || ""} ${
                     order.folder?.ukuran || ""
                   }`}</TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {order.folder?.description +
-                      "\n" +
-                      order.folder.workingDescription || "N/A"}
+                  <TableCell>{order.folder.kodeOrder}</TableCell>
+                  <TableCell className="max-w-xs relative">
+                    {(() => {
+                      const content =
+                        order.folder?.description +
+                          "\n" +
+                          order.folder.workingDescription || "N/A";
+                      const isExpanded = expandedOrderId === order.order._id;
+                      const hasMultipleLines = content?.includes("\n");
+
+                      if (content === "N/A") {
+                        return "N/A";
+                      }
+
+                      return (
+                        <div
+                          className={`${
+                            isExpanded ? "whitespace-pre-wrap" : "truncate"
+                          } ${
+                            hasMultipleLines || content.length > 50
+                              ? "cursor-pointer hover:text-gray-600"
+                              : ""
+                          }`}
+                          onClick={() => {
+                            if (hasMultipleLines || content.length > 50) {
+                              setExpandedOrderId(
+                                isExpanded ? null : order.order._id
+                              );
+                            }
+                          }}
+                        >
+                          {content}
+                          {(hasMultipleLines || content.length > 50) && (
+                            <button
+                              className="ml-2 inline-flex items-center"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedOrderId(
+                                  isExpanded ? null : order.order._id
+                                );
+                              }}
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </TableCell>
 
                   <TableCell>

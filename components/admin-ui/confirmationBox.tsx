@@ -311,6 +311,34 @@ export function ConfirmationBox(props: {
     }
   };
 
+  const handleFinish = async () => {
+    try {
+      fetch("https://jovanalbum-system-backend.onrender.com/tracking/delete", {
+        // fetch("http://localhost:8001/tracking/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order)
+      });
+
+      fetch("https://jovanalbum-system-backend.onrender.com/order/delete", {
+        // fetch("http://localhost:8001/order/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order)
+      });
+
+      //change order status to history
+      fetch("https://jovanalbum-system-backend.onrender.com/order/history", {
+        // fetch("http://localhost:8001/order/history", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(order)
+      });
+    } catch (error) {
+      console.error("Error completing order:", error);
+    }
+  };
+
   return (
     <Dialog>
       <DialogTrigger asChild>{props.button}</DialogTrigger>
@@ -384,6 +412,14 @@ export function ConfirmationBox(props: {
               <Button
                 type="submit"
                 onClick={handleSend}
+                className="bg-green-300"
+              >
+                {props.buttonText}
+              </Button>
+            ) : props.text === "Selesai" ? (
+              <Button
+                type="submit"
+                onClick={handleFinish}
                 className="bg-green-300"
               >
                 {props.buttonText}

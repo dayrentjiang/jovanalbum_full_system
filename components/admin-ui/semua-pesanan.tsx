@@ -82,7 +82,6 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
     return text.toLowerCase().trim();
   };
 
-
   // Update filteredOrders when props.orders changes
   useEffect(() => {
     if (!filterValue) {
@@ -136,6 +135,44 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
       // Reapply the current filter value with the new type
       handleFilter(filterValue);
     }
+  };
+
+  const handleCompleteButton = async (order: Order) => {
+    console.log("Complete button clicked");
+    const statusResponse = await fetch(
+      `https://jovanalbum-system-backend.onrender.com/order/complete`,
+      // "http://localhost:8001/order/complete",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ _id: order._id })
+      }
+    );
+    const response = await statusResponse.json();
+    console.log(response);
+
+    // Send WhatsApp message
+    const phoneNumber = order.sender.whatsapp
+      .replace(/^0/, "62") // Convert local phone numbers to international format
+      .replace(/[-+ ]/g, ""); // Remove unwanted characters
+
+    // Create folder details message
+    const folderDetailsMessage = order.folders
+      .map(
+        (folder, index) =>
+          `Folder ${index + 1}:%0Aukuran: ${folder.ukuran}%0Adeskripsi: ${
+            folder.description
+          }`
+      )
+      .join("%0A__________________________%0A");
+
+    // Construct the WhatsApp message without the trackingId line
+    const message = `https://wa.me/${phoneNumber}?text=*PESANANMU*%20*SUDAH*%20*SELESAI*%20*!*%0A.......%0ATerima%20kasih!%20pesananmu%20atas%20nama:%20${order.sender.name}%20sudah%20selesai%20dan%20dapat%20langsung%20diambil%20di%20JovanAlbum!%0A%0A__________________________%0Arincian%20pesanan:%0A${folderDetailsMessage}%0A__________________________%0A%0A.......%0A*%20Jovan%20Album%20*`;
+
+    // Open the WhatsApp link
+    window.open(message, "_blank", "noopener,noreferrer");
   };
 
   const statusClassMap: { [key: string]: string } = {
@@ -331,14 +368,44 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                     </Popover>
                   </TableCell>
                   <TableCell>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        statusClassMap[order.status] ||
-                        "bg-blue-200 text-blue-800" // Fallback for "new"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
+                    <div>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          statusClassMap[order.status] ||
+                          "bg-blue-200 text-blue-800" // Fallback for "new"
+                        }`}
+                      >
+                        {order.status}
+                      </span>
+                      {(() => {
+                        const allFoldersComplete = order.folders.every(
+                          (folder) =>
+                            folder.stepChecklist
+                              ? folder.stepChecklist[
+                                  folder.stepChecklist.length - 1
+                                ]
+                                  ?.toLowerCase()
+                                  .includes("selesai (done)")
+                              : null
+                        );
+
+                        return (
+                          <>
+                            {allFoldersComplete &&
+                              order.status !== "complete" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="bg-green-50 hover:bg-green-100 text-green-600"
+                                  onClick={() => handleCompleteButton(order)}
+                                >
+                                  Complete
+                                </Button>
+                              )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <EstimatedDeliveryBox
@@ -373,6 +440,23 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
                             }
                             text={"Terima"}
                             buttonText={"kirim"}
+                            users={users}
+                          />
+                        </div>
+                      ) : null}
+
+                      {order.status === "complete" ? (
+                        <div>
+                          <ConfirmationBox
+                            button={
+                              <button className="p-1 hover:bg-gray-100 rounded">
+                                <Check className="h-4 w-4 text-green-800" />
+                              </button>
+                            }
+                            order={[order]}
+                            description="Are you sure you want to finish this order?"
+                            text={"Finish"}
+                            buttonText="Finish"
                             users={users}
                           />
                         </div>
