@@ -23,7 +23,8 @@ export function SelesaiBox(props: {
     try {
       // Delete tracking
       const trackingResponse = await fetch(
-        "http://localhost:8001/tracking/delete",
+        "https://jovanalbum-system-backend.onrender.com/tracking/delete",
+        // "http://localhost:8001/tracking/delete",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -34,7 +35,8 @@ export function SelesaiBox(props: {
 
       // Delete order
       const orderDeleteResponse = await fetch(
-        "http://localhost:8001/order/delete",
+        "https://jovanalbum-system-backend.onrender.com/order/delete",
+        // "http://localhost:8001/order/delete",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -45,7 +47,8 @@ export function SelesaiBox(props: {
 
       // Move to history
       const historyResponse = await fetch(
-        "http://localhost:8001/order/history",
+        "https://jovanalbum-system-backend.onrender.com/order/history",
+        // "http://localhost:8001/order/history",
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

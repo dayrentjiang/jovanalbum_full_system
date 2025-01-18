@@ -61,7 +61,10 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
 
     try {
       const response = await fetch(
-        `http://localhost:8001/order/checklist/${isDone ? "undone" : "done"}`,
+        `https://jovanalbum-system-backend.onrender.com/order/checklist/${
+          isDone ? "undone" : "done"
+        }`,
+        // `http://localhost:8001/order/checklist/${isDone ? "undone" : "done"}`,
         {
           method: "PATCH",
           headers: {
@@ -95,7 +98,8 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
       if (!lastCompletedStep) return;
 
       const response = await fetch(
-        "http://localhost:8001/order/folder/updatestatus",
+        "https://jovanalbum-system-backend.onrender.com/order/folder/updatestatus",
+        // "http://localhost:8001/order/folder/updatestatus",
         {
           method: "PATCH",
           headers: {
@@ -120,7 +124,8 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
   const handleAssignFolder = async () => {
     try {
       const response = await fetch(
-        "http://localhost:8001/order/assign/singlefolder",
+        "https://jovanalbum-system-backend.onrender.com/order/assign/singlefolder",
+        // "http://localhost:8001/order/assign/singlefolder",
         {
           method: "PATCH",
           headers: {

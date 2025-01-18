@@ -102,96 +102,98 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
     ]
   };
 
+  const fetchOrders = async () => {
+    try {
+      const res = await fetch(
+        `https://jovanalbum-system-backend.onrender.com/order/user/${props.userId}`
+      );
+      const data = await res.json();
+      const orders = Array.isArray(data) ? data : [data];
+
+      // Process each order's folders to assign checklists
+      for (const order of orders) {
+        if (
+          !order.folder.stepChecklist ||
+          order.folder.stepChecklist.length === 0
+        ) {
+          const checklistForType =
+            processTypes[order.folder.tipe as keyof typeof processTypes] ||
+            processTypes["Other"];
+          await assignChecklistToFolder(order.folder._id, checklistForType);
+        }
+      }
+
+      setOrders(orders);
+      setError(null);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      setError("Failed to load orders");
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch(
+        "https://jovanalbum-system-backend.onrender.com/user"
+      );
+      const data = await res.json();
+      setUsers(data);
+      setError(null);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      setError("Failed to load users");
+    }
+  };
+
+  const assignChecklistToFolder = async (
+    folderId: string,
+    checklist: string[]
+  ) => {
+    try {
+      const response = await fetch(
+        "https://jovanalbum-system-backend.onrender.com/order/assign/checklist",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            folderId,
+            checklist
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to assign checklist");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error assigning checklist:", error);
+      throw error;
+    }
+  };
+
+  // Initial data fetch
   useEffect(() => {
-    const fetchData = async () => {
+    const initialFetch = async () => {
       setIsLoading(true);
-      try {
-        const res = await fetch(
-          `http://localhost:8001/order/user/${props.userId}`
-        );
-        const data = await res.json();
-        const orders = Array.isArray(data) ? data : [data];
-
-        console.log("Orders:", orders);
-
-        // Process each order's folders to assign checklists
-        for (const order of orders) {
-          if (
-            !order.folder.stepChecklist ||
-            order.folder.stepChecklist.length === 0
-          ) {
-            // Only assign if checklist is empty
-            const checklistForType =
-              processTypes[order.folder.tipe as keyof typeof processTypes] ||
-              processTypes["Other"];
-            await assignChecklistToFolder(order.folder._id, checklistForType);
-          }
-        }
-
-        setOrders(orders);
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-        setError("Failed to load orders");
-      } finally {
-        setIsLoading(false);
-      }
+      await Promise.all([fetchOrders(), fetchUsers()]);
+      setIsLoading(false);
     };
-
-    // Frontend: Function to call the backend endpoint
-    const assignChecklistToFolder = async (
-      folderId: string,
-      checklist: string[]
-    ) => {
-      try {
-        const response = await fetch(
-          "http://localhost:8001/order/assign/checklist",
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              folderId,
-              checklist
-            })
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to assign checklist");
-        }
-
-        return await response.json();
-      } catch (error) {
-        console.error("Error assigning checklist:", error);
-        throw error;
-      }
-    };
-
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(
-          "https://jovanalbum-system-backend.onrender.com/user"
-        );
-        const data = await res.json();
-        setUsers(data);
-      } catch (error) {
-        setError("Error fetching user");
-        console.error("Error fetching user:", error);
-      }
-    };
-
-    fetchData();
-    fetchUser();
+    initialFetch();
   }, []);
 
-  //console.log the orders every 5 sec
+  // Set up auto-refresh interval
   useEffect(() => {
-    const interval = setInterval(() => {
-      console.log(orders);
+    const intervalId = setInterval(async () => {
+      await fetchOrders();
     }, 5000);
-    return () => clearInterval(interval);
-  }, [orders]);
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []);
 
   if (isLoading) {
     return <div className="p-6">Loading orders...</div>;

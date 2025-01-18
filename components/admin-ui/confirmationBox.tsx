@@ -29,6 +29,8 @@ export function ConfirmationBox(props: {
       ukuran: string;
       tipe: string;
       description: string;
+      stepChecklist: string[];
+      kodeOrder: string;
     }[];
   }[];
   button: React.ReactNode;
@@ -122,7 +124,8 @@ export function ConfirmationBox(props: {
   ) => {
     try {
       const response = await fetch(
-        "http://localhost:8001/order/assign/checklist",
+        "https://jovanalbum-system-backend.onrender.com/order/assign/checklist",
+        // "http://localhost:8001/order/assign/checklist",
         {
           method: "PATCH",
           headers: {
@@ -193,8 +196,8 @@ export function ConfirmationBox(props: {
         const assignment = folderAssignments[i];
         if (assignment.worker) {
           await fetch(
-            // "https://jovanalbum-system-backend.onrender.com/order/folder/assign",
-            "http://localhost:8001/order/folder/assign",
+            "https://jovanalbum-system-backend.onrender.com/order/folder/assign",
+            // "http://localhost:8001/order/folder/assign",
             {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
@@ -216,17 +219,21 @@ export function ConfirmationBox(props: {
 
           // Assign worker if selected
           if (assignment.worker) {
-            await fetch("http://localhost:8001/order/folder/assign", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                assigneeId: assignment.worker,
-                orderId: order._id,
-                folderId: folder._id,
-                workingDescription: assignment.description,
-                folderIndex: i
-              })
-            });
+            await fetch(
+              "https://jovanalbum-system-backend.onrender.com/order/folder/assign",
+              {
+                // "http://localhost:8001/order/folder/assign", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  assigneeId: assignment.worker,
+                  orderId: order._id,
+                  folderId: folder._id,
+                  workingDescription: assignment.description,
+                  folderIndex: i
+                })
+              }
+            );
           }
 
           // Assign checklist based on folder type
@@ -237,14 +244,18 @@ export function ConfirmationBox(props: {
             await assignChecklistToFolder(folder._id, checklistForType);
 
             // Mark first step as done (Admin - Terima)
-            await fetch("http://localhost:8001/order/checklist/done", {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                folderId: folder._id,
-                checklistIndex: 0 // First step
-              })
-            });
+            await fetch(
+              "https://jovanalbum-system-backend.onrender.com/order/checklist/done",
+              {
+                // "http://localhost:8001/order/checklist/done", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  folderId: folder._id,
+                  checklistIndex: 0 // First step
+                })
+              }
+            );
           } catch (error) {
             console.error(
               `Failed to process checklist for folder ${i}:`,
@@ -254,14 +265,18 @@ export function ConfirmationBox(props: {
         }
 
         //4. update the tracking status
-        await fetch("http://localhost:8001/order/checklist/done", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            folderId: order.folders[i]._id,
-            checklistIndex: 0
-          })
-        });
+        await fetch(
+          "https://jovanalbum-system-backend.onrender.com/order/checklist/done",
+          {
+            // "http://localhost:8001/order/checklist/done", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              folderId: order.folders[i]._id,
+              checklistIndex: 0
+            })
+          }
+        );
       }
 
       // 5. Send WhatsApp notification
@@ -269,21 +284,47 @@ export function ConfirmationBox(props: {
         .replace(/^0/, "62")
         .replace(/[-+ ]/g, "");
 
-      // Create folder details message
+      // Add this before the WhatsApp section
+      console.log("About to send WhatsApp message");
+      console.log("Phone number:", phoneNumber);
+      console.log("Tracking ID:", trackingId);
+
       const folderDetailsMessage = order.folders
-        .map(
-          (folder, index) =>
-            `Folder ${index + 1}:%0Aukuran: ${folder.ukuran}%0Adeskripsi: ${
-              folder.description
-            }`
-        )
-        .join("%0A__________________________%0A");
+        .map((folder, index) => {
+          const folderNumber = index + 1;
+          return `Folder ${folderNumber}:
+${folder.tipe ? `tipe: ${folder.tipe}` : ""}
+${folder.kodeOrder ? `kode order: ${folder.kodeOrder}` : ""} 
+ukuran: ${folder.ukuran}
+deskripsi: ${folder.description} ||`;
+        })
+        .join("\n\n");
+
+      const message = `*PESANANMU* *SUDAH* *KAMI* *TERIMA!*
+.......
+Terima kasih! pesananmu atas nama: ${order.sender.name} telah kami terima dan akan segera di proses!
+
+__________________________
+rincian pesanan:
+
+${folderDetailsMessage}
+__________________________
+
+nomor order: *${trackingId}*
+Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
+.......
+* Jovan Album *`;
+
+      const encodedMessage = encodeURIComponent(message);
 
       window.open(
-        `https://wa.me/${phoneNumber}?text=*PESANANMU*%20*SUDAH*%20*KAMI*%20*TERIMA!*%0A.......%0ATerima%20kasih!%20pesananmu%20atas%20nama:%20${order.sender.name}%20telah%20kami%20terima%20dan%20akan%20segera%20di%20proses!%0A%0A__________________________%0Arincian%20pesanan:%0A${folderDetailsMessage}%0A__________________________%0A%0Anomor%20order:%20*${trackingId}*%0ATrack%20Pesanan%20mu%20disini:%20https%3A%2F%2Fjovanalbumsystem.web.app%2Ftrack%2F${trackingId}%0A.......%0A*%20Jovan%20Album%20*`,
+        `https://wa.me/${phoneNumber}?text=${encodedMessage}`,
         "_blank",
         "noopener,noreferrer"
       );
+
+      // After window.open
+      console.log("WhatsApp window.open called");
 
       // Reset and refresh
       setFolderAssignments(

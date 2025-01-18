@@ -45,7 +45,7 @@ interface Order {
     status?: string;
     assignee?: string;
     assigneeName?: string;
-    orderStatusNow?: [];
+    orderStatusNow?: string[];
     kodeOrder: string;
     stepChecklist: string[];
   }[];
@@ -60,7 +60,7 @@ interface User {
   userId: string;
   firstName: string;
   LastName: string;
-  Orders: [];
+  Orders: Order[];
 }
 
 export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {

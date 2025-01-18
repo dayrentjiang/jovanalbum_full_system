@@ -33,6 +33,7 @@ interface EditBoxProps {
       tipe?: string;
       kodeOrder?: string; // Added kodeOrder to the interface
       assignee?: string;
+      stepChecklist?: string[]; // Added stepChecklist to the interface
     }[];
     trackingId?: string;
   }[];
@@ -52,7 +53,8 @@ export function EditBox(props: EditBoxProps) {
       driveLink: folder.driveLink || "",
       tipe: folder.tipe || "",
       kodeOrder: folder.kodeOrder || "", // Added kodeOrder to the state
-      assignee: folder.assignee || ""
+      assignee: folder.assignee || "",
+      stepChecklist: folder.stepChecklist || []
     }))
   });
 
@@ -99,7 +101,8 @@ export function EditBox(props: EditBoxProps) {
   const handleEdit = async () => {
     try {
       const response = await fetch(
-        `http://localhost:8001/order/update/${order._id}`,
+        `https://jovanalbum-system-backend.onrender.com/order/update/${order._id}`,
+        // `http://localhost:8001/order/update/${order._id}`,
         {
           method: "PATCH",
           headers: {
