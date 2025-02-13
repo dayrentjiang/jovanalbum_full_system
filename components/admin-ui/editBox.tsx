@@ -27,6 +27,7 @@ interface EditBoxProps {
     _id: string;
     sender: { whatsapp: string; name: string };
     folders: {
+      _id: string;
       ukuran: string;
       description: string;
       driveLink?: string;
@@ -57,6 +58,75 @@ export function EditBox(props: EditBoxProps) {
       stepChecklist: folder.stepChecklist || []
     }))
   });
+
+  const handleCompleteButton = async () => {
+    console.log("Complete button clicked");
+    // First, mark all checklists as done for each folder
+
+    for (const folder of order.folders) {
+      // Get the number of checklist items for this folder
+      if (folder.stepChecklist) {
+        const checklistLength = folder.stepChecklist.length;
+        // Mark each checklist item as done
+        for (let index = 0; index < checklistLength; index++) {
+          const isDone = folder.stepChecklist[index].includes("(done)");
+
+          // Only update if not already done
+          if (!isDone) {
+            await fetch(
+              `https://jovanalbum-system-backend.onrender.com/order/checklist/done`,
+              {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  folderId: folder._id,
+                  checklistIndex: index
+                })
+              }
+            );
+          }
+        }
+      }
+    }
+
+    const statusResponse = await fetch(
+      `https://jovanalbum-system-backend.onrender.com/order/complete`,
+      // "http://localhost:8001/order/complete",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ _id: order._id })
+      }
+    );
+    const response = await statusResponse.json();
+    console.log(response);
+    // add done to the checklist of each order
+
+    // Send WhatsApp message
+    const phoneNumber = order.sender.whatsapp
+      .replace(/^0/, "62") // Convert local phone numbers to international format
+      .replace(/[-+ ]/g, ""); // Remove unwanted characters
+
+    // Create folder details message
+    const folderDetailsMessage = order.folders
+      .map(
+        (folder, index) =>
+          `Folder ${index + 1}:%0Atipe:${folder.tipe}%0Aukuran: ${
+            folder.ukuran
+          }%0AKodeOrder: ${folder.kodeOrder}%0Adeskripsi: ${folder.description}`
+      )
+      .join("%0A__________________________%0A");
+
+    // Construct the WhatsApp message without the trackingId line
+    const message = `https://wa.me/${phoneNumber}?text=*PESANANMU*%20*SUDAH*%20*SELESAI*%20*!*%0A.......%0ATerima%20kasih!%20pesananmu%20atas%20nama:%20${order.sender.name}%20sudah%20selesai%20dan%20dapat%20langsung%20diambil%20di%20JovanAlbum!%0A%0A__________________________%0Arincian%20pesanan:%0A${folderDetailsMessage}%0A__________________________%0A%0A.......%0A*%20Jovan%20Album%20*`;
+
+    // Open the WhatsApp link
+    window.open(message, "_blank", "noopener,noreferrer");
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
@@ -162,6 +232,30 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
     );
   };
 
+  //change the status back to on-process
+  const handleOnProcessButton = async () => {
+    try {
+      const response = await fetch(
+        `https://jovanalbum-system-backend.onrender.com/order/accept`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ _id: order._id })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update order status");
+      }
+      console.log("Order status updated successfully");
+      window.location.reload();
+    } catch (error) {
+      console.error("Error updating order status:", error);
+    }
+  };
+
   return (
     <Dialog>
       <DialogTrigger asChild>{props.button}</DialogTrigger>
@@ -211,6 +305,12 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
                 className="col-span-3"
               />
             </div>
+            <div>
+              <Button onClick={() => handleCompleteButton()}>complete</Button>
+              <Button onClick={() => handleOnProcessButton()}>
+                on-process
+              </Button>
+            </div>
           </div>
 
           {/* Folders section */}
@@ -245,13 +345,34 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
                   <Label htmlFor={`tipe-${index}`} className="text-right">
                     Type
                   </Label>
-                  <Input
-                    id={`tipe-${index}`}
-                    name="tipe"
+                  <Select
                     value={folder.tipe}
-                    onChange={(e) => handleInputChange(e, "folders", index)}
-                    className="col-span-3"
-                  />
+                    onValueChange={(value) => {
+                      const updatedFolders = [...formData.folders];
+                      updatedFolders[index] = {
+                        ...updatedFolders[index],
+                        tipe: value
+                      };
+                      setFormData((prev) => ({
+                        ...prev,
+                        folders: updatedFolders
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="col-span-3">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="Cetak Foto">Cetak Foto</SelectItem>
+                      <SelectItem value="Kolase">Kolase</SelectItem>
+                      <SelectItem value="Magazine">Magazine</SelectItem>
+                      <SelectItem value="Semi Kolase">Semi Kolase</SelectItem>
+                      <SelectItem value="Cetak+Bingkai">
+                        Cetak+Bingkai
+                      </SelectItem>
+                      <SelectItem value="Flash Disk">Flash Disk</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 {/* Added Kode Order field */}
                 <div className="grid grid-cols-4 items-center gap-4">

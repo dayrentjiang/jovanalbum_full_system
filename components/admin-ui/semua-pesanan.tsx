@@ -23,13 +23,13 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Check, X, Edit, ChevronDown, Link } from "lucide-react";
+import { Check, X, Edit, ChevronDown, Link, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { ConfirmationBox } from "./confirmationBox";
 import { EditBox } from "./editBox";
 import { EstimatedDeliveryBox } from "./estimatedFinishBox";
 
-interface Order {
+export interface Order {
   _id: string;
   trackingId: string;
   sender: {
@@ -48,6 +48,7 @@ interface Order {
     orderStatusNow?: string[];
     kodeOrder: string;
     stepChecklist: string[];
+    subFolderId: string;
   }[];
   mainFolderId: string;
   uploadDate: string;
@@ -64,39 +65,32 @@ interface User {
 }
 
 export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
-  // Extract props
   const { orders, users } = props;
-
-  // Set up state
   const [filterType, setFilterType] = useState<
     "name" | "trackingId" | "phone" | "description"
   >("name");
   const [filterValue, setFilterValue] = useState("");
   const [filteredOrders, setFilteredOrders] = useState<Order[]>(orders);
+  const [sortByEstimatedDelivery, setSortByEstimatedDelivery] = useState(false);
 
-  // Normalize phone number by removing spaces, +, and -
   const normalizePhoneNumber = (phone: string): string => {
     return phone.replace(/[\s+\-]/g, "").toLowerCase();
   };
+
   const normalizeText = (text: string): string => {
     return text.toLowerCase().trim();
   };
 
-  // Update filteredOrders when props.orders changes
   useEffect(() => {
     if (!filterValue) {
       setFilteredOrders(orders);
     } else {
-      // If there is an active filter, reapply it to the new orders
       handleFilter(filterValue);
     }
-    console.log("Orders updated");
-    console.log(orders);
   }, [orders]);
 
   const handleFilter = (value: string) => {
     setFilterValue(value);
-
     const normalizedValue = normalizeText(value);
 
     const filtered = orders.filter((order) => {
@@ -106,20 +100,16 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
             ? normalizeText(order.trackingId)
             : "pending";
           return trackingId.includes(normalizedValue);
-
         case "name":
           const name = normalizeText(order.sender.name);
           return name.includes(normalizedValue);
-
         case "phone":
           const phone = normalizePhoneNumber(order.sender.whatsapp);
           const searchPhone = normalizePhoneNumber(value);
           return phone.includes(searchPhone);
-
         case "description":
           const description = normalizeText(order.folders[0].description);
           return description.includes(normalizedValue);
-
         default:
           return false;
       }
@@ -128,13 +118,41 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
     setFilteredOrders(filtered);
   };
 
-  // When changing filter type
   const handleFilterTypeChange = (value: "name" | "trackingId" | "phone") => {
     setFilterType(value);
     if (filterValue) {
-      // Reapply the current filter value with the new type
       handleFilter(filterValue);
     }
+  };
+
+  const sortOrders = (ordersToSort: Order[]) => {
+    if (sortByEstimatedDelivery) {
+      return [...ordersToSort].sort((a, b) => {
+        // If neither has estimatedFinish, sort by uploadDate
+        if (!a.estimatedFinish && !b.estimatedFinish) {
+          return (
+            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+          );
+        }
+        // If only one has estimatedFinish, put the one without at the end
+        if (!a.estimatedFinish) return 1;
+        if (!b.estimatedFinish) return -1;
+        // If both have estimatedFinish, sort by that date
+        return (
+          new Date(a.estimatedFinish).getTime() -
+          new Date(b.estimatedFinish).getTime()
+        );
+      });
+    } else {
+      return [...ordersToSort].sort(
+        (a, b) =>
+          new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
+      );
+    }
+  };
+
+  const toggleSort = () => {
+    setSortByEstimatedDelivery(!sortByEstimatedDelivery);
   };
 
   const handleCompleteButton = async (order: Order) => {
@@ -162,9 +180,9 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
     const folderDetailsMessage = order.folders
       .map(
         (folder, index) =>
-          `Folder ${index + 1}:%0Aukuran: ${folder.ukuran}%0Adeskripsi: ${
-            folder.description
-          }`
+          `Folder ${index + 1}:%0Atipe:${folder.tipe}%0Aukuran: ${
+            folder.ukuran
+          }%0AKodeOrder: ${folder.kodeOrder}%0Adeskripsi: ${folder.description}`
       )
       .join("%0A__________________________%0A");
 
@@ -212,13 +230,23 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
           onChange={(e) => handleFilter(e.target.value)}
           className="max-w-sm border-gray-300"
         />
+
+        <Button
+          variant="outline"
+          onClick={toggleSort}
+          className="ml-auto flex items-center gap-2"
+        >
+          <ArrowUpDown className="h-4 w-4" />
+          {sortByEstimatedDelivery
+            ? "Sort by Upload Date"
+            : "Sort by Delivery Date"}
+        </Button>
       </div>
 
       <div className="border rounded-lg">
         <Table>
           <TableHeader>
             <TableRow className="bg-gray-50">
-              {/* <TableHead className="font-semibold">Tracking ID</TableHead> */}
               <TableHead className="font-semibold">Date of Order</TableHead>
               <TableHead className="font-semibold">Name of Sender</TableHead>
               <TableHead className="font-semibold">WhatsApp Number</TableHead>
@@ -231,267 +259,265 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrders
-              .sort(
-                (a, b) =>
-                  new Date(b.uploadDate).getTime() -
-                  new Date(a.uploadDate).getTime()
-              )
-              .map((order) => (
-                <TableRow key={order._id} className="hover:bg-gray-50">
-                  {/* <TableCell>
+            {sortOrders(filteredOrders).map((order) => (
+              <TableRow key={order._id} className="hover:bg-gray-50">
+                {/* <TableCell>
                     {order.trackingId ? order.trackingId : "Pending"}
                   </TableCell> */}
-                  <TableCell>
-                    {format(
-                      new Date(order.uploadDate),
-                      "dd-MMM-yyyy | hh:mm a"
-                    )}
-                  </TableCell>
-                  <TableCell>{order.sender.name}</TableCell>
-                  <TableCell>{order.sender.whatsapp}</TableCell>
-                  <TableCell className="relative">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-16 border-gray-300"
-                        >
-                          {order.folders.length}{" "}
-                          <ChevronDown className="ml-1 h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-[auto] p-0 shadow-lg"
-                        align="start"
-                        sideOffset={5}
-                        // alignOffset={}
+                <TableCell>
+                  {format(new Date(order.uploadDate), "dd-MMM-yyyy | hh:mm a")}
+                </TableCell>
+                <TableCell>{order.sender.name}</TableCell>
+                <TableCell>{order.sender.whatsapp}</TableCell>
+                <TableCell className="relative">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-16 border-gray-300"
                       >
-                        <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                          <h4 className="text-sm font-semibold">Folders</h4>
-                          <p className="text-sm text-gray-500">
-                            List of folders and their types
-                          </p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="space-y-2">
-                            {order.folders.map((folder, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center justify-between px-4 py-2 bg-white rounded-md hover:bg-gray-50 transition-colors duration-150"
-                              >
-                                <div className="flex flex-col flex-grow max-w-[50%]">
-                                  <span className="font-medium text-gray-900">
-                                    {folder.tipe
-                                      ? `${folder.tipe}-${folder.ukuran}`
-                                      : folder.ukuran}
-                                  </span>
-                                  <span className="text-gray-500 text-xs max-w-[50%]">
-                                    {folder.description}
-                                  </span>
-                                </div>
+                        {order.folders.length}
+                        <ChevronDown className="ml-1 h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[1000px] p-0 shadow-lg bg-white"
+                      align="center"
+                      side="top"
+                      sideOffset={20}
+                      style={{
+                        position: "fixed",
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)"
+                      }}
+                    >
+                      <div className="px-4 py-3 border-b border-gray-200">
+                        <h4 className="text-sm font-semibold">Folders</h4>
+                        <p className="text-sm text-gray-500">
+                          List of folders and their types
+                        </p>
+                      </div>
+                      <div className="max-h-[60vh] overflow-y-auto">
+                        <div className="p-3 space-y-2">
+                          {order.folders.map((folder, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors duration-150 border-b border-gray-100 last:border-0"
+                            >
+                              <div className="flex-1 max-w-[50%]">
+                                <span className="font-medium text-gray-900">
+                                  {folder.tipe
+                                    ? `${folder.tipe}-${folder.ukuran}`
+                                    : folder.ukuran}
+                                </span>
+                                <p className="text-gray-500 text-xs mt-1">
+                                  {folder.description}
+                                </p>
+                              </div>
 
-                                <div className="flex flex-col flex-grow">
-                                  <span className="text-sm text-gray-600 min-w-[40px] ml-5">
-                                    {folder.kodeOrder
-                                      ? folder.kodeOrder
-                                      : "N/A"}
-                                  </span>
-                                </div>
+                              <div className="flex-1 ml-8 mr-6">
+                                <span className="text-sm text-gray-600 ml-5">
+                                  {folder.kodeOrder || "N/A"}
+                                </span>
+                              </div>
 
-                                <div className="flex items-center gap-6 ml-10">
-                                  <span
-                                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                                      folder.stepChecklist?.some((step) =>
-                                        step.includes("(done)")
-                                      )
-                                        ? folder.stepChecklist[
-                                            folder.stepChecklist.length - 1
-                                          ].includes("(done)")
-                                          ? "bg-green-100 text-green-800"
-                                          : "bg-blue-100 text-blue-800"
-                                        : "bg-gray-100 text-gray-800"
-                                    }`}
-                                  >
-                                    {folder.stepChecklist?.find((step) =>
+                              <div className="flex items-center gap-6">
+                                <span
+                                  className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                    folder.stepChecklist?.some((step) =>
                                       step.includes("(done)")
                                     )
-                                      ? folder.stepChecklist
-                                          .filter((step) =>
-                                            step.includes("(done)")
-                                          )
-                                          .pop()
-                                          ?.replace(" (done)", "")
-                                      : "Pending"}
-                                  </span>
-                                  <span className="text-sm text-gray-600 min-w-[100px] ml-5">
-                                    {folder.assigneeName || "Belum"}
-                                  </span>
-
-                                  <button
-                                    onClick={() => {
-                                      if (folder.driveLink) {
-                                        // Open both the specific folder and main folder
-                                        window.open(
-                                          folder.driveLink,
-                                          "_blank",
-                                          "noopener,noreferrer"
-                                        );
-                                        window.open(
-                                          `https://drive.google.com/drive/folders/${order.mainFolderId}`,
-                                          "_blank",
-                                          "noopener,noreferrer"
-                                        );
-                                      } else {
-                                        // Only open main folder
-                                        window.open(
-                                          `https://drive.google.com/drive/folders/${order.mainFolderId}`,
-                                          "_blank",
-                                          "noopener,noreferrer"
-                                        );
-                                      }
-                                    }}
-                                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors ml-4"
-                                  >
-                                    <Link size={14} className="inline" />
-                                    <span>
-                                      {folder.driveLink ? "Drive (2)" : "Open"}
-                                    </span>
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          statusClassMap[order.status] ||
-                          "bg-blue-200 text-blue-800" // Fallback for "new"
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                      {(() => {
-                        const allFoldersComplete = order.folders.every(
-                          (folder) =>
-                            folder.stepChecklist
-                              ? folder.stepChecklist[
-                                  folder.stepChecklist.length - 1
-                                ]
-                                  ?.toLowerCase()
-                                  .includes("selesai (done)")
-                              : null
-                        );
-
-                        return (
-                          <>
-                            {allFoldersComplete &&
-                              order.status !== "complete" && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="bg-green-50 hover:bg-green-100 text-green-600"
-                                  onClick={() => handleCompleteButton(order)}
+                                      ? folder.stepChecklist[
+                                          folder.stepChecklist.length - 1
+                                        ].includes("(done)")
+                                        ? "bg-green-100 text-green-800"
+                                        : "bg-blue-100 text-blue-800"
+                                      : "bg-gray-100 text-gray-800"
+                                  }`}
                                 >
-                                  Complete
-                                </Button>
-                              )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <EstimatedDeliveryBox
-                      orderId={order._id}
-                      button={
-                        <button className="p-1 hover:bg-gray-100 rounded text-blue-800">
-                          {order.estimatedFinish ? (
-                            format(
-                              new Date(order.estimatedFinish),
-                              "dd-MMM-yyyy"
-                            )
-                          ) : (
-                            <p className="text-gray-800">Set Delivery Date</p>
-                          )}
-                        </button>
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {order.status === "new" ? (
-                        <div>
-                          <ConfirmationBox
-                            button={
-                              <button className="p-1 hover:bg-gray-100 rounded">
-                                <Check className="h-4 w-4 text-gray-600" />
-                              </button>
-                            }
-                            order={[order]}
-                            description={
-                              "Select a worker and add a description. Click send when you're done."
-                            }
-                            text={"Terima"}
-                            buttonText={"kirim"}
-                            users={users}
-                          />
-                        </div>
-                      ) : null}
+                                  {folder.stepChecklist?.find((step) =>
+                                    step.includes("(done)")
+                                  )
+                                    ? folder.stepChecklist
+                                        .filter((step) =>
+                                          step.includes("(done)")
+                                        )
+                                        .pop()
+                                        ?.replace(" (done)", "")
+                                    : "Pending"}
+                                </span>
 
-                      {order.status === "complete" ? (
-                        <div>
-                          <ConfirmationBox
-                            button={
-                              <button className="p-1 hover:bg-gray-100 rounded">
-                                <Check className="h-4 w-4 text-green-800" />
-                              </button>
-                            }
-                            order={[order]}
-                            description="Are you sure you want to finish this order?"
-                            text={"Finish"}
-                            buttonText="Finish"
-                            users={users}
-                          />
-                        </div>
-                      ) : null}
+                                <span className="text-sm text-gray-600 min-w-[100px] ml-5">
+                                  {folder.assigneeName || "Belum"}
+                                </span>
 
+                                <button
+                                  onClick={() => {
+                                    if (folder.driveLink) {
+                                      window.open(
+                                        folder.driveLink,
+                                        "_blank",
+                                        "noopener,noreferrer"
+                                      );
+                                      window.open(
+                                        `https://drive.google.com/drive/folders/${
+                                          folder.subFolderId
+                                            ? folder.subFolderId
+                                            : order.mainFolderId
+                                        }`,
+                                        "_blank",
+                                        "noopener,noreferrer"
+                                      );
+                                    } else {
+                                      window.open(
+                                        `https://drive.google.com/drive/folders/${
+                                          folder.subFolderId
+                                            ? folder.subFolderId
+                                            : order.mainFolderId
+                                        }`,
+                                        "_blank",
+                                        "noopener,noreferrer"
+                                      );
+                                    }
+                                  }}
+                                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors ml-4"
+                                >
+                                  <Link size={14} className="inline" />
+                                  <span>
+                                    {folder.driveLink ? "Drive (2)" : "Open"}
+                                  </span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </TableCell>
+                <TableCell>
+                  <div>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        statusClassMap[order.status] ||
+                        "bg-blue-200 text-blue-800" // Fallback for "new"
+                      }`}
+                    >
+                      {order.status}
+                    </span>
+                    {(() => {
+                      const allFoldersComplete = order.folders.every((folder) =>
+                        folder.stepChecklist
+                          ? folder.stepChecklist[
+                              folder.stepChecklist.length - 1
+                            ]
+                              ?.toLowerCase()
+                              .includes("selesai (done)")
+                          : null
+                      );
+
+                      return (
+                        <>
+                          {allFoldersComplete &&
+                            order.status !== "complete" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-green-50 hover:bg-green-100 text-green-600"
+                                onClick={() => handleCompleteButton(order)}
+                              >
+                                Complete
+                              </Button>
+                            )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <EstimatedDeliveryBox
+                    orderId={order._id}
+                    button={
+                      <button className="p-1 hover:bg-gray-100 rounded text-blue-800">
+                        {order.estimatedFinish ? (
+                          format(new Date(order.estimatedFinish), "dd-MMM-yyyy")
+                        ) : (
+                          <p className="text-gray-800">Set Delivery Date</p>
+                        )}
+                      </button>
+                    }
+                  />
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {order.status === "new" ? (
                       <div>
                         <ConfirmationBox
                           button={
                             <button className="p-1 hover:bg-gray-100 rounded">
-                              <X className="h-4 w-4 text-gray-600" />
+                              <Check className="h-4 w-4 text-gray-600" />
                             </button>
                           }
                           order={[order]}
-                          description="Are you sure you want to reject this order?"
-                          text={"Reject"}
-                          buttonText="Reject"
+                          description={
+                            "Select a worker and add a description. Click send when you're done."
+                          }
+                          text={"Terima"}
+                          buttonText={"kirim"}
                           users={users}
                         />
                       </div>
+                    ) : null}
 
+                    {order.status === "complete" ? (
                       <div>
-                        <EditBox
-                          order={[order]}
+                        <ConfirmationBox
                           button={
                             <button className="p-1 hover:bg-gray-100 rounded">
-                              <Edit className="h-4 w-4 text-gray-600" />
+                              <Check className="h-4 w-4 text-green-800" />
                             </button>
                           }
+                          order={[order]}
+                          description="Are you sure you want to finish this order?"
+                          text={"Finish"}
+                          buttonText="Finish"
                           users={users}
                         />
                       </div>
+                    ) : null}
+
+                    <div>
+                      <ConfirmationBox
+                        button={
+                          <button className="p-1 hover:bg-gray-100 rounded">
+                            <X className="h-4 w-4 text-gray-600" />
+                          </button>
+                        }
+                        order={[order]}
+                        description="Are you sure you want to reject this order?"
+                        text={"Reject"}
+                        buttonText="Reject"
+                        users={users}
+                      />
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+
+                    <div>
+                      <EditBox
+                        order={[order]}
+                        button={
+                          <button className="p-1 hover:bg-gray-100 rounded">
+                            <Edit className="h-4 w-4 text-gray-600" />
+                          </button>
+                        }
+                        users={users}
+                      />
+                    </div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>

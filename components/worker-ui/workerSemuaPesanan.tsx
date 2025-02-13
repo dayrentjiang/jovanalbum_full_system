@@ -241,7 +241,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
         <div className="border rounded-lg">
           <Table>
             <TableHeader>
-              <TableRow className="bg-gray-50">
+              <TableRow className="bg-gray-300">
                 <TableHead className="font-semibold">Upload Date</TableHead>
                 <TableHead className="font-semibold">Sender Name</TableHead>
                 {/* <TableHead className="font-semibold">WhatsApp</TableHead> */}
@@ -256,8 +256,13 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map((order) => (
-                <TableRow key={order.order._id}>
+              {filteredOrders.map((order, index) => (
+                <TableRow
+                  key={order.order._id}
+                  className={`border-b border-gray-300 ${
+                    index % 2 === 0 ? "bg-gray-50" : "bg-white"
+                  }`}
+                >
                   <TableCell>
                     {new Date(order.order.uploadDate).toLocaleDateString(
                       "id-ID"
@@ -272,7 +277,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
                   <TableCell className="max-w-xs relative">
                     {(() => {
                       const content =
-                        order.folder?.description +
+                        order.folder?.description.split("|")[0] +
                           "\n" +
                           order.folder.workingDescription || "N/A";
                       const isExpanded = expandedOrderId === order.order._id;
@@ -332,12 +337,18 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
                   <TableCell>
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                        order.folder.stepChecklist?.some((step) =>
+                        order.folder.stepChecklist?.find((step) =>
                           step.includes("(done)")
                         )
-                          ? order.folder.stepChecklist[
-                              order.folder.stepChecklist.length - 1
-                            ].includes("(done)")
+                          ? order.folder.stepChecklist
+                              .filter((step) => step.includes("(done)"))
+                              .pop()
+                              ?.replace(" (done)", "")
+                              .includes("Admin - Terima")
+                            ? "bg-red-100 text-red-800"
+                            : order.folder.stepChecklist[
+                                order.folder.stepChecklist.length - 1
+                              ].includes("(done)")
                             ? "bg-green-100 text-green-800"
                             : "bg-blue-100 text-blue-800"
                           : "bg-gray-100 text-gray-800"

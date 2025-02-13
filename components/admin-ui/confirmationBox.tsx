@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +25,7 @@ export function ConfirmationBox(props: {
   order: {
     _id: string;
     sender: { whatsapp: string; name: string };
+    estimatedFinish: Date;
     folders: {
       _id: string;
       ukuran: string;
@@ -66,7 +68,7 @@ export function ConfirmationBox(props: {
       "Azis - Naik ke atas",
       "Azis - Selesai"
     ],
-    "Semi Magazine": [
+    "Semi Kolase": [
       "Admin - Terima",
       "Admin - Edit",
       "Admin - Set warna",
@@ -75,12 +77,12 @@ export function ConfirmationBox(props: {
       "Admin - Kasih Putra",
       "Admin - Selesai"
     ],
-    "Bingkai": [
+    "Cetak+Bingkai": [
       "Admin - Terima",
       "Bojes - Cetak",
       "Bojes - Laminating",
-      "Admin - Kode Bingkai",
-      "Admin - Naik ke atas",
+      "Bojes - Kode Bingkai",
+      "Bojes - Naik ke atas",
       "Admin - Selesai"
     ],
     "Flash Disk": ["Admin - Terima", "Bojes - Grafir", "Bojes - Selesai"],
@@ -264,19 +266,19 @@ export function ConfirmationBox(props: {
           }
         }
 
-        //4. update the tracking status
-        await fetch(
-          "https://jovanalbum-system-backend.onrender.com/order/checklist/done",
-          {
-            // "http://localhost:8001/order/checklist/done", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              folderId: order.folders[i]._id,
-              checklistIndex: 0
-            })
-          }
-        );
+        // //4. update the tracking status
+        // await fetch(
+        //   "https://jovanalbum-system-backend.onrender.com/order/checklist/done",
+        //   {
+        //     // "http://localhost:8001/order/checklist/done", {
+        //     method: "PATCH",
+        //     headers: { "Content-Type": "application/json" },
+        //     body: JSON.stringify({
+        //       folderId: order.folders[i]._id,
+        //       checklistIndex: 0
+        //     })
+        //   }
+        // );
       }
 
       // 5. Send WhatsApp notification
@@ -288,6 +290,10 @@ export function ConfirmationBox(props: {
       console.log("About to send WhatsApp message");
       console.log("Phone number:", phoneNumber);
       console.log("Tracking ID:", trackingId);
+
+      const estimatedFinish = order.estimatedFinish
+        ? format(new Date(order.estimatedFinish), "dd-MMM-yyyy")
+        : "belum ada estimasi selesai";
 
       const folderDetailsMessage = order.folders
         .map((folder, index) => {
@@ -310,8 +316,9 @@ rincian pesanan:
 ${folderDetailsMessage}
 __________________________
 
-nomor order: *${trackingId}*
-Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
+Perkiraan Selesai: ${estimatedFinish}
+Klik disini untuk Lihat Proses Pesanan-mu:
+https://jovanalbumsystem.web.app/track/${trackingId}
 .......
 * Jovan Album *`;
 
@@ -354,27 +361,41 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
 
   const handleFinish = async () => {
     try {
-      fetch("https://jovanalbum-system-backend.onrender.com/tracking/delete", {
-        // fetch("http://localhost:8001/tracking/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
-      });
+      console.log("Trying to finish order");
+      const requests = [
+        fetch("https://jovanalbum-system-backend.onrender.com/order/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order)
+        }),
+        fetch("https://jovanalbum-system-backend.onrender.com/order/history", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order)
+        })
+      ];
 
-      fetch("https://jovanalbum-system-backend.onrender.com/order/delete", {
-        // fetch("http://localhost:8001/order/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
-      });
+      const responses = await Promise.all(requests);
 
-      //change order status to history
-      fetch("https://jovanalbum-system-backend.onrender.com/order/history", {
-        // fetch("http://localhost:8001/order/history", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(order)
-      });
+      // Check if all requests were successful
+      const allSuccessful = responses.every((response) => response.ok);
+
+      if (allSuccessful) {
+        const data = await Promise.all(responses.map((res) => res.json()));
+        console.log("Order finished successfully:", data);
+      } else {
+        console.error("One or more requests failed");
+        for (let i = 0; i < responses.length; i++) {
+          if (!responses[i].ok) {
+            const errorData = await responses[i].json();
+            console.error(
+              `Request ${i + 1} failed with status: ${responses[i].status}`,
+              errorData
+            );
+          }
+        }
+      }
+      window.location.reload();
     } catch (error) {
       console.error("Error completing order:", error);
     }
@@ -457,7 +478,7 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
               >
                 {props.buttonText}
               </Button>
-            ) : props.text === "Selesai" ? (
+            ) : props.text === "Finish" ? (
               <Button
                 type="submit"
                 onClick={handleFinish}
