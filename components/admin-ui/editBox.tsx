@@ -13,7 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -44,6 +44,10 @@ interface EditBoxProps {
 
 export function EditBox(props: EditBoxProps) {
   const order = props.order[0];
+  const [isCompleteLoading, setIsCompleteLoading] = useState(false);
+  const [isOnProcessLoading, setIsOnProcessLoading] = useState(false);
+  const [isWhatsAppLoading, setIsWhatsAppLoading] = useState(false);
+  const [isSaveLoading, setIsSaveLoading] = useState(false);
   const [formData, setFormData] = useState({
     sender: {
       name: order.sender.name,
@@ -60,72 +64,93 @@ export function EditBox(props: EditBoxProps) {
   });
 
   const handleCompleteButton = async () => {
-    console.log("Complete button clicked");
-    // First, mark all checklists as done for each folder
+    if (isCompleteLoading) return;
+    setIsCompleteLoading(true);
 
-    for (const folder of order.folders) {
-      // Get the number of checklist items for this folder
-      if (folder.stepChecklist) {
-        const checklistLength = folder.stepChecklist.length;
-        // Mark each checklist item as done
-        for (let index = 0; index < checklistLength; index++) {
-          const isDone = folder.stepChecklist[index].includes("(done)");
-
-          // Only update if not already done
-          if (!isDone) {
-            await fetch(
-              `https://jovanalbum-system-backend.onrender.com/order/checklist/done`,
-              {
-                method: "PATCH",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                  folderId: folder._id,
-                  checklistIndex: index
-                })
-              }
-            );
+    try {
+      // Complete all checklists first
+      for (const folder of order.folders) {
+        if (folder.stepChecklist) {
+          const checklistLength = folder.stepChecklist.length;
+          for (let index = 0; index < checklistLength; index++) {
+            const isDone = folder.stepChecklist[index].includes("(done)");
+            if (!isDone) {
+              await fetch(
+                `https://jovanalbum-system-backend.onrender.com/order/checklist/done`,
+                {
+                  method: "PATCH",
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    folderId: folder._id,
+                    checklistIndex: index
+                  })
+                }
+              );
+            }
           }
         }
       }
+
+      // Mark order as complete
+      const statusResponse = await fetch(
+        `https://jovanalbum-system-backend.onrender.com/order/complete`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ _id: order._id })
+        }
+      );
+
+      const response = await statusResponse.json();
+      console.log(response);
+
+      // Prepare WhatsApp message
+      const phoneNumber = order.sender.whatsapp
+        .replace(/^0/, "62")
+        .replace(/\D/g, "");
+      const senderName = order.sender.name;
+
+      const foldersDetails = order.folders
+        .map((folder, index) => {
+          const folderNumber = index + 1;
+          return `Folder ${folderNumber}:
+  tipe: ${folder.tipe}
+  ukuran: ${folder.ukuran}
+  kode order: ${folder.kodeOrder}
+  deskripsi: ${folder.description} ||`;
+        })
+        .join("\n\n");
+
+      const message = `*PESANANMU* *SUDAH* *SELESAI* *!*
+  .......
+  Terima kasih! pesananmu atas nama: ${senderName} sudah selesai dan dapat langsung diambil di JovanAlbum!
+  
+  __________________________
+  rincian pesanan:
+  
+  ${foldersDetails}
+  __________________________
+  
+  .......
+  * Jovan Album *`;
+
+      const encodedMessage = encodeURIComponent(message);
+      window.open(
+        `https://wa.me/${phoneNumber}?text=${encodedMessage}`,
+        "_blank",
+        "noopener,noreferrer"
+      );
+
+      window.location.reload();
+    } catch (error) {
+      console.error("Error completing order:", error);
+    } finally {
+      setIsCompleteLoading(false);
     }
-
-    const statusResponse = await fetch(
-      `https://jovanalbum-system-backend.onrender.com/order/complete`,
-      // "http://localhost:8001/order/complete",
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ _id: order._id })
-      }
-    );
-    const response = await statusResponse.json();
-    console.log(response);
-    // add done to the checklist of each order
-
-    // Send WhatsApp message
-    const phoneNumber = order.sender.whatsapp
-      .replace(/^0/, "62") // Convert local phone numbers to international format
-      .replace(/[-+ ]/g, ""); // Remove unwanted characters
-
-    // Create folder details message
-    const folderDetailsMessage = order.folders
-      .map(
-        (folder, index) =>
-          `Folder ${index + 1}:%0Atipe:${folder.tipe}%0Aukuran: ${
-            folder.ukuran
-          }%0AKodeOrder: ${folder.kodeOrder}%0Adeskripsi: ${folder.description}`
-      )
-      .join("%0A__________________________%0A");
-
-    // Construct the WhatsApp message without the trackingId line
-    const message = `https://wa.me/${phoneNumber}?text=*PESANANMU*%20*SUDAH*%20*SELESAI*%20*!*%0A.......%0ATerima%20kasih!%20pesananmu%20atas%20nama:%20${order.sender.name}%20sudah%20selesai%20dan%20dapat%20langsung%20diambil%20di%20JovanAlbum!%0A%0A__________________________%0Arincian%20pesanan:%0A${folderDetailsMessage}%0A__________________________%0A%0A.......%0A*%20Jovan%20Album%20*`;
-
-    // Open the WhatsApp link
-    window.open(message, "_blank", "noopener,noreferrer");
   };
 
   const handleInputChange = (
@@ -169,10 +194,12 @@ export function EditBox(props: EditBoxProps) {
   };
 
   const handleEdit = async () => {
+    if (isSaveLoading) return;
+    setIsSaveLoading(true);
+
     try {
       const response = await fetch(
         `https://jovanalbum-system-backend.onrender.com/order/update/${order._id}`,
-        // `http://localhost:8001/order/update/${order._id}`,
         {
           method: "PATCH",
           headers: {
@@ -185,30 +212,35 @@ export function EditBox(props: EditBoxProps) {
       if (!response.ok) {
         throw new Error("Failed to update order");
       }
-
       console.log("Order updated successfully");
     } catch (error) {
       console.error("Error updating order:", error);
+    } finally {
+      setIsSaveLoading(false);
     }
   };
 
-  const handleWhatsAppResend = () => {
-    const phoneNumber = formData.sender.whatsapp.replace(/\D/g, "");
-    const senderName = formData.sender.name;
-    const trackingId = order.trackingId || "";
+  const handleWhatsAppResend = async () => {
+    if (isWhatsAppLoading) return;
+    setIsWhatsAppLoading(true);
 
-    const foldersDetails = formData.folders
-      .map((folder, index) => {
-        const folderNumber = index + 1;
-        return `Folder ${folderNumber}:
+    try {
+      const phoneNumber = formData.sender.whatsapp.replace(/\D/g, "");
+      const senderName = formData.sender.name;
+      const trackingId = order.trackingId || "";
+
+      const foldersDetails = formData.folders
+        .map((folder, index) => {
+          const folderNumber = index + 1;
+          return `Folder ${folderNumber}:
 ${folder.tipe ? `tipe: ${folder.tipe}` : ""}
 ${folder.kodeOrder ? `kode order: ${folder.kodeOrder}` : ""} 
 ukuran: ${folder.ukuran}
 deskripsi: ${folder.description} ||`;
-      })
-      .join("\n\n");
+        })
+        .join("\n\n");
 
-    const message = `*PESANANMU* *SUDAH* *KAMI* *TERIMA!*
+      const message = `*PESANANMU* *SUDAH* *KAMI* *TERIMA!*
 .......
 Terima kasih! pesananmu atas nama: ${senderName} telah kami terima dan akan segera di proses!
 
@@ -223,17 +255,22 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
 .......
 * Jovan Album *`;
 
-    const encodedMessage = encodeURIComponent(message);
-
-    window.open(
-      `https://wa.me/${phoneNumber}?text=${encodedMessage}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
+      const encodedMessage = encodeURIComponent(message);
+      window.open(
+        `https://wa.me/${phoneNumber}?text=${encodedMessage}`,
+        "_blank",
+        "noopener,noreferrer"
+      );
+    } finally {
+      setIsWhatsAppLoading(true);
+    }
   };
 
   //change the status back to on-process
   const handleOnProcessButton = async () => {
+    if (isOnProcessLoading) return;
+    setIsOnProcessLoading(true);
+
     try {
       const response = await fetch(
         `https://jovanalbum-system-backend.onrender.com/order/accept`,
@@ -253,6 +290,8 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
       window.location.reload();
     } catch (error) {
       console.error("Error updating order status:", error);
+    } finally {
+      setIsOnProcessLoading(false);
     }
   };
 
@@ -275,9 +314,14 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
               <Button
                 type="button"
                 onClick={handleWhatsAppResend}
-                className="bg-green-500 hover:bg-green-600 flex items-center gap-2"
+                disabled={isWhatsAppLoading}
+                className="bg-green-500 hover:bg-green-600 flex items-center gap-2 disabled:bg-green-300"
               >
-                <MessageCircle className="w-4 h-4" />
+                {isWhatsAppLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <MessageCircle className="w-4 h-4" />
+                )}
                 Resend WhatsApp
               </Button>
             </div>
@@ -305,10 +349,26 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
                 className="col-span-3"
               />
             </div>
-            <div>
-              <Button onClick={() => handleCompleteButton()}>complete</Button>
-              <Button onClick={() => handleOnProcessButton()}>
-                on-process
+            <div className="flex gap-2">
+              <Button
+                onClick={handleCompleteButton}
+                disabled={isCompleteLoading}
+                className="disabled:bg-gray-300 bg-blue-500 hover:bg-blue-600"
+              >
+                {isCompleteLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
+                Complete
+              </Button>
+              <Button
+                onClick={handleOnProcessButton}
+                disabled={isOnProcessLoading}
+                className="disabled:bg-gray-300 bg-yellow-500 hover:bg-yellow-600"
+              >
+                {isOnProcessLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
+                On-process
               </Button>
             </div>
           </div>
@@ -437,8 +497,12 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
             <Button
               type="submit"
               onClick={handleEdit}
-              className="bg-blue-500 hover:bg-blue-600"
+              disabled={isSaveLoading}
+              className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300"
             >
+              {isSaveLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
               Save Changes
             </Button>
           </DialogClose>

@@ -8,11 +8,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogClose
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -21,7 +21,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 
-export function ConfirmationBox(props: {
+interface OrderProps {
   order: {
     _id: string;
     sender: { whatsapp: string; name: string };
@@ -40,9 +40,13 @@ export function ConfirmationBox(props: {
   text: string;
   buttonText: string;
   users: { firstName: string; userId: string }[];
-}) {
+}
+
+export function ConfirmationBox(props: OrderProps) {
   const order = props.order[0];
   const users = props.users;
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const processTypes = {
     "Cetak Foto": [
@@ -94,7 +98,6 @@ export function ConfirmationBox(props: {
     ]
   };
 
-  // Create state for each folder's worker and description
   const [folderAssignments, setFolderAssignments] = useState(
     order.folders.map(() => ({
       worker: "",
@@ -103,7 +106,6 @@ export function ConfirmationBox(props: {
   );
 
   const handleWorkerChange = (index: number, workerId: string) => {
-    console.log(folderAssignments);
     setFolderAssignments((prev) => {
       const newAssignments = [...prev];
       newAssignments[index] = { ...newAssignments[index], worker: workerId };
@@ -119,47 +121,70 @@ export function ConfirmationBox(props: {
     });
   };
 
-  //assign checklist to folder
   const assignChecklistToFolder = async (
     folderId: string,
     checklist: string[]
   ) => {
-    try {
-      const response = await fetch(
-        "https://jovanalbum-system-backend.onrender.com/order/assign/checklist",
-        // "http://localhost:8001/order/assign/checklist",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            folderId,
-            checklist
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Server error:", errorData); // Debug log
-        throw new Error(
-          `Failed to assign checklist: ${errorData.message || "Unknown error"}`
-        );
+    const response = await fetch(
+      "https://jovanalbum-system-backend.onrender.com/order/assign/checklist",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId, checklist })
       }
+    );
 
-      const result = await response.json();
-      console.log("Assignment result:", result); // Debug log
-      return result.folder;
+    if (!response.ok) {
+      throw new Error("Failed to assign checklist");
+    }
+
+    return await response.json();
+  };
+
+  const handleFinish = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      const responses = await Promise.all([
+        fetch("https://jovanalbum-system-backend.onrender.com/order/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order)
+        }),
+        fetch("https://jovanalbum-system-backend.onrender.com/order/history", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(order)
+        })
+      ]);
+
+      const allSuccessful = responses.every((response) => response.ok);
+
+      if (allSuccessful) {
+        const results = await Promise.all(responses.map((res) => res.json()));
+        console.log("Order finished successfully:", results);
+
+        // Wait for backend to process
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        setIsOpen(false);
+        window.location.reload();
+      } else {
+        throw new Error("One or more requests failed");
+      }
     } catch (error) {
-      console.error("Error assigning checklist:", error);
-      throw error;
+      console.error("Error completing order:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleSend = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
     try {
-      // 1. Change order status to "on-process"
+      // 1. Accept order
       const acceptResponse = await fetch(
         "https://jovanalbum-system-backend.onrender.com/order/accept",
         {
@@ -168,9 +193,10 @@ export function ConfirmationBox(props: {
           body: JSON.stringify(order)
         }
       );
+
       if (!acceptResponse.ok) throw new Error("Failed to accept order");
 
-      // 2. Create tracking ID
+      // 2. Create tracking
       const trackingResponse = await fetch(
         "https://jovanalbum-system-backend.onrender.com/tracking/create",
         {
@@ -179,131 +205,80 @@ export function ConfirmationBox(props: {
           body: JSON.stringify({ _id: order._id })
         }
       );
-      if (!trackingResponse.ok) throw new Error("Tracking creation failed");
-      const trackingData = await trackingResponse.json();
 
-      // Add tracking ID to order
-      const trackingId = trackingData.trackingId;
+      if (!trackingResponse.ok) throw new Error("Failed to create tracking");
+      const { trackingId } = await trackingResponse.json();
+
+      // 3. Add tracking to order
       await fetch(
         "https://jovanalbum-system-backend.onrender.com/order/tracking",
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ _id: order._id, trackingId: trackingId })
+          body: JSON.stringify({ _id: order._id, trackingId })
         }
       );
 
-      // 3. Assign folders to workers
-      for (let i = 0; i < folderAssignments.length; i++) {
+      // 4. Process folders
+      for (let i = 0; i < order.folders.length; i++) {
+        const folder = order.folders[i];
         const assignment = folderAssignments[i];
+
         if (assignment.worker) {
           await fetch(
             "https://jovanalbum-system-backend.onrender.com/order/folder/assign",
-            // "http://localhost:8001/order/folder/assign",
             {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 assigneeId: assignment.worker,
                 orderId: order._id,
-                folderId: order.folders[i]._id,
+                folderId: folder._id,
                 workingDescription: assignment.description,
-                folderIndex: i // Add folder index to identify which folder is assigned
+                folderIndex: i
               })
             }
           );
         }
 
-        // 3. Process each folder: assign workers and checklists
-        for (let i = 0; i < order.folders.length; i++) {
-          const folder = order.folders[i];
-          const assignment = folderAssignments[i];
+        // Assign and process checklist
+        const checklistForType =
+          processTypes[folder.tipe as keyof typeof processTypes] ||
+          processTypes["Other"];
+        await assignChecklistToFolder(folder._id, checklistForType);
 
-          // Assign worker if selected
-          if (assignment.worker) {
-            await fetch(
-              "https://jovanalbum-system-backend.onrender.com/order/folder/assign",
-              {
-                // "http://localhost:8001/order/folder/assign", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  assigneeId: assignment.worker,
-                  orderId: order._id,
-                  folderId: folder._id,
-                  workingDescription: assignment.description,
-                  folderIndex: i
-                })
-              }
-            );
+        // Mark first step as done
+        await fetch(
+          "https://jovanalbum-system-backend.onrender.com/order/checklist/done",
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              folderId: folder._id,
+              checklistIndex: 0
+            })
           }
-
-          // Assign checklist based on folder type
-          try {
-            const checklistForType =
-              processTypes[folder.tipe as keyof typeof processTypes] ||
-              processTypes["Other"];
-            await assignChecklistToFolder(folder._id, checklistForType);
-
-            // Mark first step as done (Admin - Terima)
-            await fetch(
-              "https://jovanalbum-system-backend.onrender.com/order/checklist/done",
-              {
-                // "http://localhost:8001/order/checklist/done", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  folderId: folder._id,
-                  checklistIndex: 0 // First step
-                })
-              }
-            );
-          } catch (error) {
-            console.error(
-              `Failed to process checklist for folder ${i}:`,
-              error
-            );
-          }
-        }
-
-        // //4. update the tracking status
-        // await fetch(
-        //   "https://jovanalbum-system-backend.onrender.com/order/checklist/done",
-        //   {
-        //     // "http://localhost:8001/order/checklist/done", {
-        //     method: "PATCH",
-        //     headers: { "Content-Type": "application/json" },
-        //     body: JSON.stringify({
-        //       folderId: order.folders[i]._id,
-        //       checklistIndex: 0
-        //     })
-        //   }
-        // );
+        );
       }
 
-      // 5. Send WhatsApp notification
+      // 5. Send WhatsApp
       const phoneNumber = order.sender.whatsapp
         .replace(/^0/, "62")
         .replace(/[-+ ]/g, "");
-
-      // Add this before the WhatsApp section
-      console.log("About to send WhatsApp message");
-      console.log("Phone number:", phoneNumber);
-      console.log("Tracking ID:", trackingId);
 
       const estimatedFinish = order.estimatedFinish
         ? format(new Date(order.estimatedFinish), "dd-MMM-yyyy")
         : "belum ada estimasi selesai";
 
       const folderDetailsMessage = order.folders
-        .map((folder, index) => {
-          const folderNumber = index + 1;
-          return `Folder ${folderNumber}:
+        .map(
+          (folder, index) =>
+            `Folder ${index + 1}:
 ${folder.tipe ? `tipe: ${folder.tipe}` : ""}
 ${folder.kodeOrder ? `kode order: ${folder.kodeOrder}` : ""} 
 ukuran: ${folder.ukuran}
-deskripsi: ${folder.description} ||`;
-        })
+deskripsi: ${folder.description} ||`
+        )
         .join("\n\n");
 
       const message = `*PESANANMU* *SUDAH* *KAMI* *TERIMA!*
@@ -322,30 +297,29 @@ https://jovanalbumsystem.web.app/track/${trackingId}
 .......
 * Jovan Album *`;
 
-      const encodedMessage = encodeURIComponent(message);
-
       window.open(
-        `https://wa.me/${phoneNumber}?text=${encodedMessage}`,
+        `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`,
         "_blank",
         "noopener,noreferrer"
       );
 
-      // After window.open
-      console.log("WhatsApp window.open called");
-
-      // Reset and refresh
-      setFolderAssignments(
-        order.folders.map(() => ({ worker: "", description: "" }))
-      );
+      // Wait for backend to process
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setIsOpen(false);
       window.location.reload();
     } catch (error) {
       console.error("Failed to process order:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleReject = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
     try {
-      await fetch(
+      const response = await fetch(
         "https://jovanalbum-system-backend.onrender.com/order/delete/fullorder",
         {
           method: "POST",
@@ -353,63 +327,32 @@ https://jovanalbumsystem.web.app/track/${trackingId}
           body: JSON.stringify(order)
         }
       );
+
+      if (!response.ok) throw new Error("Failed to reject order");
+
+      // Wait for backend to process
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setIsOpen(false);
       window.location.reload();
     } catch (error) {
-      console.error("Error deleting order:", error);
-    }
-  };
-
-  const handleFinish = async () => {
-    try {
-      console.log("Trying to finish order");
-      const requests = [
-        fetch("https://jovanalbum-system-backend.onrender.com/order/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(order)
-        }),
-        fetch("https://jovanalbum-system-backend.onrender.com/order/history", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(order)
-        })
-      ];
-
-      const responses = await Promise.all(requests);
-
-      // Check if all requests were successful
-      const allSuccessful = responses.every((response) => response.ok);
-
-      if (allSuccessful) {
-        const data = await Promise.all(responses.map((res) => res.json()));
-        console.log("Order finished successfully:", data);
-      } else {
-        console.error("One or more requests failed");
-        for (let i = 0; i < responses.length; i++) {
-          if (!responses[i].ok) {
-            const errorData = await responses[i].json();
-            console.error(
-              `Request ${i + 1} failed with status: ${responses[i].status}`,
-              errorData
-            );
-          }
-        }
-      }
-      window.location.reload();
-    } catch (error) {
-      console.error("Error completing order:", error);
+      console.error("Error rejecting order:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>{props.button}</DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild onClick={() => setIsOpen(true)}>
+        {props.button}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] bg-white max-h-[625px] overflow-auto">
         <DialogHeader>
           <DialogTitle>{props.text}</DialogTitle>
           <DialogDescription>{props.description}</DialogDescription>
         </DialogHeader>
-        {props.text === "Terima" ? (
+
+        {props.text === "Terima" && (
           <div className="grid gap-4 py-4">
             {order.folders.map((folder, index) => (
               <div
@@ -417,8 +360,7 @@ https://jovanalbumsystem.web.app/track/${trackingId}
                 className="space-y-4 border-b pb-4 last:border-0"
               >
                 <h4 className="font-medium">
-                  Folder {index + 1}: {`${folder.tipe ? folder.tipe : "tipe"}`}-
-                  {folder.ukuran}
+                  Folder {index + 1}: {folder.tipe || "tipe"}-{folder.ukuran}
                 </h4>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor={`worker-${index}`} className="text-right">
@@ -464,39 +406,59 @@ https://jovanalbumsystem.web.app/track/${trackingId}
               </div>
             ))}
           </div>
-        ) : (
-          <p></p>
         )}
 
-        <DialogClose>
-          <DialogFooter>
-            {props.text === "Terima" ? (
-              <Button
-                type="submit"
-                onClick={handleSend}
-                className="bg-green-300"
-              >
-                {props.buttonText}
-              </Button>
-            ) : props.text === "Finish" ? (
-              <Button
-                type="submit"
-                onClick={handleFinish}
-                className="bg-green-300"
-              >
-                {props.buttonText}
-              </Button>
-            ) : (
-              <Button
-                type="submit"
-                onClick={handleReject}
-                className="bg-red-300"
-              >
-                {props.buttonText}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogClose>
+        <DialogFooter>
+          {props.text === "Terima" ? (
+            <Button
+              type="submit"
+              onClick={handleSend}
+              disabled={isLoading}
+              className="bg-green-300 hover:bg-green-400 disabled:bg-gray-300"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Processing...
+                </>
+              ) : (
+                props.buttonText
+              )}
+            </Button>
+          ) : props.text === "Finish" ? (
+            <Button
+              type="submit"
+              onClick={handleFinish}
+              disabled={isLoading}
+              className="bg-green-300 hover:bg-green-400 disabled:bg-gray-300"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Finishing...
+                </>
+              ) : (
+                props.buttonText
+              )}
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              onClick={handleReject}
+              disabled={isLoading}
+              className="bg-red-300 hover:bg-red-400 disabled:bg-gray-300"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Rejecting...
+                </>
+              ) : (
+                props.buttonText
+              )}
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -51,41 +51,64 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
 }) => {
   const [selectedUser, setSelectedUser] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [pendingUpdates, setPendingUpdates] = useState<
+    { item: string; index: number; isDone: boolean }[]
+  >([]);
   const folderId = order.folder?._id;
   const orderId = order.order?._id;
 
   const checklistItems = order.folder?.stepChecklist || [];
 
-  const handleCheckboxChange = async (item: string, index: number) => {
+  const handleCheckboxChange = (item: string, index: number) => {
     const isDone = item.includes("(done)");
 
-    try {
-      const response = await fetch(
-        `https://jovanalbum-system-backend.onrender.com/order/checklist/${
-          isDone ? "undone" : "done"
-        }`,
-        // `http://localhost:8001/order/checklist/${isDone ? "undone" : "done"}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            folderId,
-            checklistIndex: index
-          })
-        }
+    // Check if this item is already in pending updates
+    const existingUpdateIndex = pendingUpdates.findIndex(
+      (update) => update.index === index
+    );
+
+    if (existingUpdateIndex !== -1) {
+      // Remove the update if it exists
+      setPendingUpdates((prev) =>
+        prev.filter((_, i) => i !== existingUpdateIndex)
       );
+    } else {
+      // Add new update
+      setPendingUpdates((prev) => [...prev, { item, index, isDone }]);
+    }
+  };
 
-      if (!response.ok) {
-        throw new Error("Failed to update checklist status");
+  const updateChecklistStatus = async (
+    updates: { item: string; index: number; isDone: boolean }[]
+  ) => {
+    try {
+      // Process all updates sequentially
+      for (const update of updates) {
+        const response = await fetch(
+          `https://jovanalbum-system-backend.onrender.com/order/checklist/${
+            update.isDone ? "undone" : "done"
+          }`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              folderId,
+              checklistIndex: update.index
+            })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to update checklist status for index ${update.index}`
+          );
+        }
       }
-
-      // Refresh the order data after updating the checklist
-      // You might want to implement a refresh function here or use a state management solution
-      window.location.reload(); // Temporary solution - you might want to implement a more elegant refresh
     } catch (error) {
-      console.error("Error updating checklist status:", error);
+      console.error("Error updating checklist statuses:", error);
+      throw error;
     }
   };
 
@@ -99,7 +122,6 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
 
       const response = await fetch(
         "https://jovanalbum-system-backend.onrender.com/order/folder/updatestatus",
-        // "http://localhost:8001/order/folder/updatestatus",
         {
           method: "PATCH",
           headers: {
@@ -125,7 +147,6 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
     try {
       const response = await fetch(
         "https://jovanalbum-system-backend.onrender.com/order/assign/singlefolder",
-        // "http://localhost:8001/order/assign/singlefolder",
         {
           method: "PATCH",
           headers: {
@@ -138,20 +159,41 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
       if (!response.ok) {
         throw new Error("Failed to assign folder");
       }
-      window.location.reload();
     } catch (error) {
       console.error("Error:", error);
+      throw error;
     }
   };
 
   const handleConfirm = async () => {
-    await handleUpdateStatus();
-    await handleAssignFolder();
-    setSelectedUser("");
-    setIsDialogOpen(false);
+    try {
+      if (pendingUpdates.length > 0) {
+        await updateChecklistStatus(pendingUpdates);
+      }
+      await handleUpdateStatus();
+      if (selectedUser) {
+        await handleAssignFolder();
+      }
+      setSelectedUser("");
+      setPendingUpdates([]);
+      setIsDialogOpen(false);
+      window.location.reload();
+    } catch (error) {
+      console.error("Error during confirmation:", error);
+    }
   };
 
   const isStepCompleted = (item: string) => item.includes("(done)");
+
+  const isPendingUpdate = (index: number) => {
+    return pendingUpdates.some((update) => update.index === index);
+  };
+
+  const getCheckboxState = (item: string, index: number) => {
+    const isDone = isStepCompleted(item);
+    const isPending = isPendingUpdate(index);
+    return isPending ? !isDone : isDone;
+  };
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -168,14 +210,21 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
             {checklistItems.map((item, index) => {
               const isDone = isStepCompleted(item);
               const displayItem = isDone ? item.replace(" (done)", "") : item;
+              const isChecked = getCheckboxState(item, index);
 
               return (
                 <div key={index} className="flex items-center space-x-2">
                   <Checkbox
                     id={`item-${index}`}
-                    checked={isDone}
+                    checked={isChecked}
                     onCheckedChange={() => handleCheckboxChange(item, index)}
-                    className={isDone ? "opacity-50" : ""}
+                    className={
+                      isPendingUpdate(index)
+                        ? "bg-yellow-200"
+                        : isDone
+                        ? "opacity-50"
+                        : ""
+                    }
                   />
                   <Label
                     htmlFor={`item-${index}`}
@@ -183,6 +232,7 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
                   >
                     {displayItem}
                     {isDone && " (Completed)"}
+                    {isPendingUpdate(index) && " (Pending)"}
                   </Label>
                 </div>
               );
@@ -212,9 +262,12 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
               type="submit"
               onClick={handleConfirm}
               className="bg-blue-500 text-white"
-              disabled={!selectedUser}
+              disabled={!selectedUser && pendingUpdates.length === 0}
             >
-              Confirm
+              Confirm{" "}
+              {pendingUpdates.length > 0
+                ? `(${pendingUpdates.length} updates)`
+                : ""}
             </Button>
           </DialogFooter>
         </DialogClose>
