@@ -168,7 +168,6 @@ export function ConfirmationBox(props: OrderProps) {
         // Wait for backend to process
         await new Promise((resolve) => setTimeout(resolve, 1000));
         setIsOpen(false);
-        window.location.reload();
       } else {
         throw new Error("One or more requests failed");
       }

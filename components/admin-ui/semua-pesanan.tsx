@@ -189,20 +189,20 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
         })
         .join("\n\n");
 
-      const message = `
-      ------------------------------------
-      PESANANMU SUDAH *SELESAI* *!*
-  ------------------------------------
-  Terima kasih! pesananmu atas nama: ${senderName} sudah selesai dan dapat langsung diambil di JovanAlbum!
+      const message = `*Terima kasih atas kepercayaan Anda kepada kami!*🙏🏻🙏🏻
+Pesanan Anda telah selesai dan siap diambil / dikirim. 
+.......
   
-  __________________________
-  rincian pesanan:
+*Rincian Pesanan:*
+Nama: ${senderName}
   
-  ${foldersDetails}
-  __________________________
+${foldersDetails}
   
-  .......
-  * Jovan Album *`;
+.......
+*Semoga Banyak Rejeki ta....Amin..*
+🥰👍🤭
+JOVAN ALBUM
+#SahabatFotografer`;
 
       const encodedMessage = encodeURIComponent(message);
       window.open(
@@ -237,21 +237,35 @@ export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
           </SelectContent>
         </Select>
 
-        <Input
-          type="text"
-          placeholder={`Filter by ${
-            filterType === "name"
-              ? "sender name"
-              : filterType === "trackingId"
-              ? "tracking ID"
-              : filterType === "phone"
-              ? "phone number"
-              : "description"
-          }`}
-          value={filterValue}
-          onChange={(e) => handleFilter(e.target.value)}
-          className="max-w-sm border-gray-300"
-        />
+        <div className="relative flex-1 max-w-sm">
+          <Input
+            type="text"
+            placeholder={`Filter by ${
+              filterType === "name"
+                ? "sender name"
+                : filterType === "trackingId"
+                ? "tracking ID"
+                : filterType === "phone"
+                ? "phone number"
+                : "description"
+            }`}
+            value={filterValue}
+            onChange={(e) => handleFilter(e.target.value)}
+            className="w-full border-gray-300 pr-8"
+          />
+          {filterValue && (
+            <button
+              onClick={() => {
+                setFilterValue("");
+                handleFilter("");
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+              aria-label="Clear filter"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
         <Button
           variant="outline"

@@ -118,25 +118,27 @@ export function EditBox(props: EditBoxProps) {
         .map((folder, index) => {
           const folderNumber = index + 1;
           return `Folder ${folderNumber}:
-  tipe: ${folder.tipe}
+  ${folder.tipe ? `tipe: ${folder.tipe}` : ""}
+  ${folder.kodeOrder ? `kode order: ${folder.kodeOrder}` : ""} 
   ukuran: ${folder.ukuran}
-  kode order: ${folder.kodeOrder}
   deskripsi: ${folder.description} ||`;
         })
         .join("\n\n");
 
-      const message = `*PESANANMU* *SUDAH* *SELESAI* *!*
-  .......
-  Terima kasih! pesananmu atas nama: ${senderName} sudah selesai dan dapat langsung diambil di JovanAlbum!
+      const message = `*Terima kasih atas kepercayaan Anda kepada kami!*🙏🏻🙏🏻
+Pesanan Anda telah selesai dan siap diambil / dikirim. 
+.......
   
-  __________________________
-  rincian pesanan:
+*Rincian Pesanan:*
+Nama: ${senderName}
   
-  ${foldersDetails}
-  __________________________
+${foldersDetails}
   
-  .......
-  * Jovan Album *`;
+.......
+*Semoga Banyak Rejeki ta....Amin..*
+🥰👍🤭
+JOVAN ALBUM
+#SahabatFotografer`;
 
       const encodedMessage = encodeURIComponent(message);
       window.open(
