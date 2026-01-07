@@ -183,6 +183,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
       setIsLoading(false);
     };
     initialFetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Set up auto-refresh interval
@@ -193,6 +194,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
 
     // Cleanup interval on component unmount
     return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (isLoading) {

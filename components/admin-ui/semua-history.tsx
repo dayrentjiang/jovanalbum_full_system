@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Table,
   TableBody,
@@ -82,19 +82,7 @@ export function SemuaHistory(props: { orders: Order[]; users: User[] }) {
     return text.toLowerCase().trim();
   };
 
-  // Update filteredOrders when props.orders changes
-  useEffect(() => {
-    if (!filterValue) {
-      setFilteredOrders(orders);
-    } else {
-      // If there is an active filter, reapply it to the new orders
-      handleFilter(filterValue);
-    }
-    console.log("Orders updated");
-    console.log(orders);
-  }, [orders]);
-
-  const handleFilter = (value: string) => {
+  const handleFilter = useCallback((value: string) => {
     setFilterValue(value);
 
     const normalizedValue = normalizeText(value);
@@ -126,7 +114,19 @@ export function SemuaHistory(props: { orders: Order[]; users: User[] }) {
     });
 
     setFilteredOrders(filtered);
-  };
+  }, [orders, filterType]);
+
+  // Update filteredOrders when props.orders changes
+  useEffect(() => {
+    if (!filterValue) {
+      setFilteredOrders(orders);
+    } else {
+      // If there is an active filter, reapply it to the new orders
+      handleFilter(filterValue);
+    }
+    console.log("Orders updated");
+    console.log(orders);
+  }, [orders, filterValue, handleFilter]);
 
   // When changing filter type
   const handleFilterTypeChange = (value: "name" | "trackingId" | "phone") => {

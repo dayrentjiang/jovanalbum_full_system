@@ -187,7 +187,7 @@ const FileDownloader: React.FC<FileDownloaderProps> = ({
     } finally {
       setIsDownloading(false);
     }
-  }, [fileId, folderName, descFolderId, apiUrl]);
+  }, [fileId, folderName, descFolderId]);
 
   return (
     <div className="space-y-4">

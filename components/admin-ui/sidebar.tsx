@@ -16,6 +16,7 @@ import {
 import { Avatar } from "@radix-ui/react-avatar";
 import { UserButton } from "@clerk/nextjs";
 import { useEffect } from "react";
+import { BACKEND_URL } from "@/lib/config";
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,9 +28,7 @@ export function Sidebar() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const res = await fetch(
-          "https://jovanalbum-system-backend.onrender.com/user"
-        );
+        const res = await fetch(`${BACKEND_URL}/user`);
         const data = await res.json();
         setUsers(data);
       } catch (error) {
