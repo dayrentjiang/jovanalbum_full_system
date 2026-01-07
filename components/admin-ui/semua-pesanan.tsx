@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Table,
   TableBody,
@@ -30,6 +31,7 @@ import { EditBox } from "./editBox";
 import { EstimatedDeliveryBox } from "./estimatedFinishBox";
 import FileDownloader from "./downloader/fileDownloader";
 import DownloadNotifications from "./downloader/downloadNotifications";
+import { Pagination } from "./pagination";
 
 export interface Order {
   _id: string;
@@ -66,95 +68,91 @@ interface User {
   Orders: Order[];
 }
 
-export function SemuaPesanan(props: { orders: Order[]; users: User[] }) {
-  const { orders, users } = props;
+interface PaginationInfo {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  pageSize: number;
+}
+
+export function SemuaPesanan(props: {
+  orders: Order[];
+  users: User[];
+  pagination: PaginationInfo;
+  isLoading: boolean;
+}) {
+  const { orders, users, pagination } = props;
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [filterType, setFilterType] = useState<
     "name" | "trackingId" | "phone" | "description"
   >("name");
   const [filterValue, setFilterValue] = useState("");
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>(orders);
-  const [sortByEstimatedDelivery, setSortByEstimatedDelivery] = useState(false);
 
-  const normalizePhoneNumber = (phone: string): string => {
-    return phone.replace(/[\s+\-]/g, "").toLowerCase();
-  };
-
-  const normalizeText = (text: string): string => {
-    return text.toLowerCase().trim();
-  };
-
+  // Initialize filter values from URL on mount
   useEffect(() => {
-    if (!filterValue) {
-      setFilteredOrders(orders);
-    } else {
-      handleFilter(filterValue);
+    const urlFilterType = searchParams.get("filterType");
+    const urlFilterValue = searchParams.get("filterValue");
+
+    if (urlFilterType) {
+      setFilterType(urlFilterType as "name" | "trackingId" | "phone" | "description");
     }
-  }, [orders]);
+    if (urlFilterValue) {
+      setFilterValue(urlFilterValue);
+    }
+  }, [searchParams]);
 
   const handleFilter = (value: string) => {
     setFilterValue(value);
-    const normalizedValue = normalizeText(value);
 
-    const filtered = orders.filter((order) => {
-      switch (filterType) {
-        case "trackingId":
-          const trackingId = order.trackingId
-            ? normalizeText(order.trackingId)
-            : "pending";
-          return trackingId.includes(normalizedValue);
-        case "name":
-          const name = normalizeText(order.sender.name);
-          return name.includes(normalizedValue);
-        case "phone":
-          const phone = normalizePhoneNumber(order.sender.whatsapp);
-          const searchPhone = normalizePhoneNumber(value);
-          return phone.includes(searchPhone);
-        case "description":
-          const description = normalizeText(order.folders[0].description);
-          return description.includes(normalizedValue);
-        default:
-          return false;
-      }
-    });
+    const params = new URLSearchParams(searchParams.toString());
 
-    setFilteredOrders(filtered);
-  };
-
-  const handleFilterTypeChange = (value: "name" | "trackingId" | "phone") => {
-    setFilterType(value);
-    if (filterValue) {
-      handleFilter(filterValue);
-    }
-  };
-
-  const sortOrders = (ordersToSort: Order[]) => {
-    if (sortByEstimatedDelivery) {
-      return [...ordersToSort].sort((a, b) => {
-        // If neither has estimatedFinish, sort by uploadDate
-        if (!a.estimatedFinish && !b.estimatedFinish) {
-          return (
-            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-          );
-        }
-        // If only one has estimatedFinish, put the one without at the end
-        if (!a.estimatedFinish) return 1;
-        if (!b.estimatedFinish) return -1;
-        // If both have estimatedFinish, sort by that date
-        return (
-          new Date(a.estimatedFinish).getTime() -
-          new Date(b.estimatedFinish).getTime()
-        );
-      });
+    if (value) {
+      params.set("filterType", filterType);
+      params.set("filterValue", value);
     } else {
-      return [...ordersToSort].sort(
-        (a, b) =>
-          new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-      );
+      params.delete("filterType");
+      params.delete("filterValue");
     }
+
+    params.set("page", "1"); // Reset to page 1 on filter change
+
+    router.push(`/admin/semua-pesanan?${params.toString()}`);
+  };
+
+  const handleFilterTypeChange = (value: "name" | "trackingId" | "phone" | "description") => {
+    setFilterType(value);
+    setFilterValue(""); // Clear filter value
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("filterType");
+    params.delete("filterValue");
+    params.set("page", "1");
+
+    router.push(`/admin/semua-pesanan?${params.toString()}`);
   };
 
   const toggleSort = () => {
-    setSortByEstimatedDelivery(!sortByEstimatedDelivery);
+    const params = new URLSearchParams(searchParams.toString());
+    const currentSort = params.get("sortBy");
+
+    if (currentSort === "estimatedFinish") {
+      params.set("sortBy", "uploadDate");
+      params.set("sortOrder", "desc");
+    } else {
+      params.set("sortBy", "estimatedFinish");
+      params.set("sortOrder", "asc");
+    }
+
+    params.set("page", "1");
+    router.push(`/admin/semua-pesanan?${params.toString()}`);
+  };
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", page.toString());
+    router.push(`/admin/semua-pesanan?${params.toString()}`);
   };
 
   const handleCompleteButton = async (order: Order) => {
@@ -273,7 +271,7 @@ JOVAN ALBUM
           className="ml-auto flex items-center gap-2"
         >
           <ArrowUpDown className="h-4 w-4" />
-          {sortByEstimatedDelivery
+          {searchParams.get("sortBy") === "estimatedFinish"
             ? "Sort by Upload Date"
             : "Sort by Delivery Date"}
         </Button>
@@ -295,7 +293,7 @@ JOVAN ALBUM
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortOrders(filteredOrders).map((order) => (
+            {orders.map((order) => (
               <TableRow key={order._id} className="hover:bg-gray-50">
                 {/* <TableCell>
                     {order.trackingId ? order.trackingId : "Pending"}
@@ -596,6 +594,12 @@ JOVAN ALBUM
         </Table>
         <DownloadNotifications />
       </div>
+
+      <Pagination
+        currentPage={pagination.currentPage}
+        totalPages={pagination.totalPages}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 }
