@@ -11,7 +11,8 @@ import {
   Users,
   ChevronDown,
   ChevronRight,
-  FileClock
+  FileClock,
+  Tags
 } from "lucide-react";
 import { Avatar } from "@radix-ui/react-avatar";
 import { UserButton } from "@clerk/nextjs";
@@ -133,6 +134,14 @@ export function Sidebar() {
               </div>
             )}
           </div>
+
+          <Link
+            href="/admin/kategori"
+            className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100"
+          >
+            <Tags className="w-5 h-5 mr-3" />
+            Kategori
+          </Link>
 
           <Link
             href="/admin/history"
