@@ -276,7 +276,7 @@ export function KategoriManager() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="bg-white text-gray-900">
           <DialogHeader>
             <DialogTitle>
               {editing ? "Edit Kategori" : "Tambah Kategori"}
