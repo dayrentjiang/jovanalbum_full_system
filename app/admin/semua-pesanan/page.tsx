@@ -1,54 +1,30 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { SemuaPesanan } from "@/components/admin-ui/semua-pesanan";
+import { useEffect, useState, useCallback } from "react";
+import { SemuaPesanan, type Order } from "@/components/admin-ui/semua-pesanan";
 import { BACKEND_URL } from "@/lib/config";
+import { fetchAllOrders } from "@/lib/api";
 
-function OrdersPageContent() {
-  const [orders, setOrders] = useState([]);
+export default function OrdersPage() {
+  const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState([]);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [pagination, setPagination] = useState({
-    currentPage: 1,
-    totalPages: 1,
-    totalCount: 0,
-    pageSize: 50,
-  });
+  const [isLoading, setIsLoading] = useState(true);
 
-  const searchParams = useSearchParams();
-
-  const fetchData = useCallback(() => {
-    setIsLoading(true);
-
-    // Build query string from URL params
-    const params = new URLSearchParams(searchParams.toString());
-    if (!params.has("status")) {
-      params.set("status", "pending,new,on-process,complete");
+  // All active orders are loaded at once (a few hundred) so every column can
+  // be sorted and filtered in the browser. Finished orders live in History.
+  const fetchData = useCallback(async () => {
+    try {
+      const data = await fetchAllOrders();
+      setOrders(data as unknown as Order[]);
+      setError(null);
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+      setError("Error fetching orders");
+    } finally {
+      setIsLoading(false);
     }
-    if (!params.has("page")) {
-      params.set("page", "1");
-    }
-    if (!params.has("limit")) {
-      params.set("limit", "50");
-    }
-
-    fetch(`${BACKEND_URL}/order/paginated?${params}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setOrders(data.data);
-          setPagination(data.pagination);
-        }
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error fetching orders:", error);
-        setError("Error fetching orders");
-        setIsLoading(false);
-      });
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -73,26 +49,13 @@ function OrdersPageContent() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  if (error) {
+  if (error && orders.length === 0) {
     return <div className="text-red-500 p-4">Error: {error}</div>;
   }
 
   return (
     <div>
-      <SemuaPesanan
-        orders={orders}
-        users={users}
-        pagination={pagination}
-        isLoading={isLoading}
-      />
+      <SemuaPesanan orders={orders} users={users} isLoading={isLoading} />
     </div>
-  );
-}
-
-export default function OrdersPage() {
-  return (
-    <Suspense fallback={<div className="p-6">Loading orders...</div>}>
-      <OrdersPageContent />
-    </Suspense>
   );
 }

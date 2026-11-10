@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SemuaHistory } from "@/components/admin-ui/semua-history";
 import { BACKEND_URL } from "@/lib/config";
 
@@ -18,6 +18,13 @@ function OrdersHistoryPageContent() {
   });
 
   const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", page.toString());
+    router.push(`/admin/history?${params.toString()}`);
+  };
 
   const fetchData = useCallback(() => {
     setIsLoading(true);
@@ -33,6 +40,11 @@ function OrdersHistoryPageContent() {
     }
     if (!params.has("limit")) {
       params.set("limit", "50");
+    }
+    // Newest first across pages; the table then sorts within the page.
+    if (!params.has("sortBy")) {
+      params.set("sortBy", "uploadDate");
+      params.set("sortOrder", "desc");
     }
 
     fetch(`${BACKEND_URL}/order/paginated?${params}`)
@@ -80,7 +92,12 @@ function OrdersHistoryPageContent() {
 
   return (
     <div>
-      <SemuaHistory orders={orders} users={users} />
+      <SemuaHistory
+        orders={orders}
+        users={users}
+        pagination={pagination}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 }
