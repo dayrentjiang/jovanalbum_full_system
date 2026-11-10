@@ -1,7 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import {
+  createColumnHelper,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type PaginationState,
+  type SortingState
+} from "@tanstack/react-table";
 import {
   Table,
   TableBody,
@@ -24,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Check, X, Edit, ChevronDown, Link, ArrowUpDown } from "lucide-react";
+import { Check, X, Edit, ChevronDown, Link } from "lucide-react";
 import { format } from "date-fns";
 import { ConfirmationBox } from "./confirmationBox";
 import { EditBox } from "./editBox";
@@ -32,6 +40,10 @@ import { EstimatedDeliveryBox } from "./estimatedFinishBox";
 import FileDownloader from "./downloader/fileDownloader";
 import DownloadNotifications from "./downloader/downloadNotifications";
 import { Pagination } from "./pagination";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { FilterChips } from "@/components/ui/filter-chips";
+import { DueBadge } from "@/components/dashboard/parts";
+import { dueInfo, isInProduction } from "@/lib/orders";
 
 export interface Order {
   _id: string;
@@ -68,92 +80,133 @@ interface User {
   Orders: Order[];
 }
 
-interface PaginationInfo {
-  currentPage: number;
-  totalPages: number;
-  totalCount: number;
-  pageSize: number;
+type FilterType = "name" | "trackingId" | "phone" | "description";
+type QuickFilter = "all" | "new" | "on-process" | "complete" | "late" | "today";
+
+const PAGE_SIZE = 50;
+
+const STATUS_RANK: Record<string, number> = { pending: 0, new: 0, "on-process": 1, complete: 2 };
+
+const normalizeText = (text: string | undefined) => (text ?? "").toLowerCase().trim();
+const normalizePhone = (phone: string | undefined) => (phone ?? "").replace(/[\s+\-]/g, "").toLowerCase();
+
+function matchesSearch(order: Order, type: FilterType, value: string): boolean {
+  const q = normalizeText(value);
+  if (!q) return true;
+  switch (type) {
+    case "name":
+      return normalizeText(order.sender?.name).includes(q);
+    case "phone":
+      return normalizePhone(order.sender?.whatsapp).includes(normalizePhone(value));
+    case "trackingId":
+      return normalizeText(order.trackingId || "pending").includes(q);
+    case "description":
+      return order.folders.some((f) => normalizeText(f.description).includes(q));
+  }
 }
+
+const isLate = (o: Order) => {
+  const d = dueInfo(o.estimatedFinish);
+  return isInProduction(o) && !!d && d.diff < 0;
+};
+const isDueToday = (o: Order) => isInProduction(o) && dueInfo(o.estimatedFinish)?.diff === 0;
+
+const QUICK_FILTERS: { key: QuickFilter; label: string; test: (o: Order) => boolean }[] = [
+  { key: "all", label: "Semua", test: () => true },
+  { key: "new", label: "Baru", test: (o) => o.status === "new" || o.status === "pending" },
+  { key: "on-process", label: "Dalam proses", test: (o) => o.status === "on-process" },
+  { key: "complete", label: "Siap diambil", test: (o) => o.status === "complete" },
+  { key: "late", label: "Terlambat", test: isLate },
+  { key: "today", label: "Deadline hari ini", test: isDueToday }
+];
+
+const columnHelper = createColumnHelper<Order>();
+
+const columns = [
+  columnHelper.accessor((o) => new Date(o.uploadDate).getTime(), { id: "uploadDate", sortDescFirst: true }),
+  columnHelper.accessor((o) => o.sender?.name ?? "", { id: "sender" }),
+  columnHelper.accessor((o) => o.sender?.whatsapp ?? "", { id: "whatsapp" }),
+  columnHelper.accessor((o) => o.folders.length, { id: "folders", sortDescFirst: true }),
+  columnHelper.accessor((o) => STATUS_RANK[o.status] ?? 0, { id: "status", sortDescFirst: false }),
+  columnHelper.accessor((o) => (o.estimatedFinish ? new Date(o.estimatedFinish).getTime() : undefined), {
+    id: "estimatedFinish",
+    sortUndefined: "last",
+    sortDescFirst: false
+  })
+];
 
 export function SemuaPesanan(props: {
   orders: Order[];
   users: User[];
-  pagination: PaginationInfo;
   isLoading: boolean;
 }) {
-  const { orders, users, pagination } = props;
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const { orders, users } = props;
 
-  const [filterType, setFilterType] = useState<
-    "name" | "trackingId" | "phone" | "description"
-  >("name");
+  const [filterType, setFilterType] = useState<FilterType>("name");
   const [filterValue, setFilterValue] = useState("");
-
-  // Initialize filter values from URL on mount
-  useEffect(() => {
-    const urlFilterType = searchParams.get("filterType");
-    const urlFilterValue = searchParams.get("filterValue");
-
-    if (urlFilterType) {
-      setFilterType(urlFilterType as "name" | "trackingId" | "phone" | "description");
-    }
-    if (urlFilterValue) {
-      setFilterValue(urlFilterValue);
-    }
-  }, [searchParams]);
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+  const [sorting, setSorting] = useState<SortingState>([{ id: "uploadDate", desc: true }]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE });
 
   const handleFilter = (value: string) => {
     setFilterValue(value);
-
-    const params = new URLSearchParams(searchParams.toString());
-
-    if (value) {
-      params.set("filterType", filterType);
-      params.set("filterValue", value);
-    } else {
-      params.delete("filterType");
-      params.delete("filterValue");
-    }
-
-    params.set("page", "1"); // Reset to page 1 on filter change
-
-    router.push(`/admin/semua-pesanan?${params.toString()}`);
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
   };
 
-  const handleFilterTypeChange = (value: "name" | "trackingId" | "phone" | "description") => {
+  const handleFilterTypeChange = (value: FilterType) => {
     setFilterType(value);
-    setFilterValue(""); // Clear filter value
-
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("filterType");
-    params.delete("filterValue");
-    params.set("page", "1");
-
-    router.push(`/admin/semua-pesanan?${params.toString()}`);
+    setFilterValue("");
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
   };
 
-  const toggleSort = () => {
-    const params = new URLSearchParams(searchParams.toString());
-    const currentSort = params.get("sortBy");
+  const handleQuickFilter = (key: QuickFilter) => {
+    setQuickFilter(key);
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+  };
 
-    if (currentSort === "estimatedFinish") {
-      params.set("sortBy", "uploadDate");
-      params.set("sortOrder", "desc");
-    } else {
-      params.set("sortBy", "estimatedFinish");
-      params.set("sortOrder", "asc");
+  const chips = useMemo(
+    () => QUICK_FILTERS.map((f) => ({ key: f.key, label: f.label, count: orders.filter(f.test).length })),
+    [orders]
+  );
+
+  const visibleOrders = useMemo(() => {
+    const test = QUICK_FILTERS.find((f) => f.key === quickFilter)!.test;
+    return orders.filter((o) => test(o) && matchesSearch(o, filterType, filterValue));
+  }, [orders, quickFilter, filterType, filterValue]);
+
+  // TanStack's hook returns functions that the React Compiler cannot memoize.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data: visibleOrders,
+    columns,
+    state: { sorting, pagination },
+    onSortingChange: (updater) => {
+      setSorting(updater);
+      setPagination((p) => ({ ...p, pageIndex: 0 }));
+    },
+    onPaginationChange: setPagination,
+    // Data refreshes every few seconds; don't jump back to page 1 each time.
+    autoResetPageIndex: false,
+    enableSortingRemoval: false,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getRowId: (o) => o._id
+  });
+
+  const pageCount = Math.max(1, table.getPageCount());
+  // If a refresh shrinks the list, don't leave the user on an empty page.
+  useEffect(() => {
+    if (pagination.pageIndex > pageCount - 1) {
+      setPagination((p) => ({ ...p, pageIndex: pageCount - 1 }));
     }
-
-    params.set("page", "1");
-    router.push(`/admin/semua-pesanan?${params.toString()}`);
-  };
+  }, [pageCount, pagination.pageIndex]);
 
   const handlePageChange = (page: number) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("page", page.toString());
-    router.push(`/admin/semua-pesanan?${params.toString()}`);
+    setPagination((p) => ({ ...p, pageIndex: page - 1 }));
   };
+
+  const col = (id: string) => table.getColumn(id);
 
   const handleCompleteButton = async (order: Order) => {
     console.log("Complete button clicked");
@@ -219,10 +272,15 @@ JOVAN ALBUM
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Semua Pesanan</h1>
+    <div className="p-4 pt-16 sm:p-6 lg:pt-6">
+      <h1 className="text-2xl font-semibold">
+        Semua Pesanan <span className="font-medium text-gray-600">({orders.length} pesanan)</span>
+      </h1>
+      <p className="mt-1 mb-6 text-sm text-gray-600">
+        Klik judul kolom untuk mengurutkan. Klik lagi untuk membalik arah.
+      </p>
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-wrap gap-4 mb-4">
         <Select value={filterType} onValueChange={handleFilterTypeChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Filter by..." />
@@ -235,7 +293,7 @@ JOVAN ALBUM
           </SelectContent>
         </Select>
 
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Input
             type="text"
             placeholder={`Filter by ${
@@ -264,36 +322,36 @@ JOVAN ALBUM
             </button>
           )}
         </div>
+      </div>
 
-        <Button
-          variant="outline"
-          onClick={toggleSort}
-          className="ml-auto flex items-center gap-2"
-        >
-          <ArrowUpDown className="h-4 w-4" />
-          {searchParams.get("sortBy") === "estimatedFinish"
-            ? "Sort by Upload Date"
-            : "Sort by Delivery Date"}
-        </Button>
+      <div className="mb-4">
+        <FilterChips chips={chips} value={quickFilter} onChange={handleQuickFilter} />
       </div>
 
       <div className="border rounded-lg">
-        <Table>
+        <Table className="min-w-[960px]">
           <TableHeader>
             <TableRow className="bg-gray-50">
-              <TableHead className="font-semibold">Date of Order</TableHead>
-              <TableHead className="font-semibold">Name of Sender</TableHead>
-              <TableHead className="font-semibold">WhatsApp Number</TableHead>
-              <TableHead className="font-semibold">Number of Folders</TableHead>
-              <TableHead className="font-semibold">Order Status</TableHead>
-              <TableHead className="font-semibold">
-                Estimated Delivery
-              </TableHead>
-              <TableHead className="font-semibold">Actions</TableHead>
+              <SortableHeader column={col("uploadDate")}>Date of Order</SortableHeader>
+              <SortableHeader column={col("sender")}>Name of Sender</SortableHeader>
+              <SortableHeader column={col("whatsapp")}>WhatsApp Number</SortableHeader>
+              <SortableHeader column={col("folders")}>Number of Folders</SortableHeader>
+              <SortableHeader column={col("status")}>Order Status</SortableHeader>
+              <SortableHeader column={col("estimatedFinish")}>Estimated Delivery</SortableHeader>
+              <TableHead className="font-semibold text-gray-900">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.map((order) => (
+            {table.getRowModel().rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center text-gray-500">
+                  {props.isLoading && orders.length === 0
+                    ? "Memuat pesanan…"
+                    : "Tidak ada pesanan yang cocok dengan filter ini."}
+                </TableCell>
+              </TableRow>
+            )}
+            {table.getRowModel().rows.map(({ original: order }) => (
               <TableRow key={order._id} className="hover:bg-gray-50">
                 {/* <TableCell>
                     {order.trackingId ? order.trackingId : "Pending"}
@@ -521,6 +579,9 @@ JOVAN ALBUM
                       </button>
                     }
                   />
+                  {isInProduction(order) && (
+                    <DueBadge due={dueInfo(order.estimatedFinish)} className="ml-1 text-[11px]" />
+                  )}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
@@ -596,10 +657,13 @@ JOVAN ALBUM
       </div>
 
       <Pagination
-        currentPage={pagination.currentPage}
-        totalPages={pagination.totalPages}
+        currentPage={pagination.pageIndex + 1}
+        totalPages={pageCount}
         onPageChange={handlePageChange}
       />
+      <p className="mt-2 text-center text-xs text-gray-600">
+        Menampilkan {table.getRowModel().rows.length} dari {visibleOrders.length} pesanan
+      </p>
     </div>
   );
 }

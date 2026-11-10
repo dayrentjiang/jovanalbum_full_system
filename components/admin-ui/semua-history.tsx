@@ -2,6 +2,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 import {
+  createColumnHelper,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState
+} from "@tanstack/react-table";
+import { SortableHeader } from "@/components/ui/sortable-header";
+import { Pagination } from "./pagination";
+import {
   Table,
   TableBody,
   TableCell,
@@ -63,9 +72,31 @@ interface User {
   Orders: Order[];
 }
 
-export function SemuaHistory(props: { orders: Order[]; users: User[] }) {
+const columnHelper = createColumnHelper<Order>();
+
+const STATUS_RANK: Record<string, number> = { pending: 0, new: 0, "on-process": 1, complete: 2, history: 3 };
+
+const columns = [
+  columnHelper.accessor((o) => new Date(o.uploadDate).getTime(), { id: "uploadDate", sortDescFirst: true }),
+  columnHelper.accessor((o) => o.sender?.name ?? "", { id: "sender" }),
+  columnHelper.accessor((o) => o.sender?.whatsapp ?? "", { id: "whatsapp" }),
+  columnHelper.accessor((o) => o.folders.length, { id: "folders", sortDescFirst: true }),
+  columnHelper.accessor((o) => STATUS_RANK[o.status] ?? 0, { id: "status" }),
+  columnHelper.accessor((o) => (o.estimatedFinish ? new Date(o.estimatedFinish).getTime() : undefined), {
+    id: "estimatedFinish",
+    sortUndefined: "last"
+  })
+];
+
+export function SemuaHistory(props: {
+  orders: Order[];
+  users: User[];
+  pagination?: { currentPage: number; totalPages: number; totalCount: number };
+  onPageChange?: (page: number) => void;
+}) {
   // Extract props
-  const { orders, users } = props;
+  const { orders, users, pagination, onPageChange } = props;
+  const [sorting, setSorting] = useState<SortingState>([{ id: "uploadDate", desc: true }]);
 
   // Set up state
   const [filterType, setFilterType] = useState<
@@ -180,9 +211,32 @@ export function SemuaHistory(props: { orders: Order[]; users: User[] }) {
     "complete": "bg-green-100 text-green-800"
   };
 
+  // History is paginated by the backend (it grows forever), so sorting
+  // applies to the orders on the current page.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const table = useReactTable({
+    data: filteredOrders,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    enableSortingRemoval: false,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getRowId: (o) => o._id
+  });
+  const col = (id: string) => table.getColumn(id);
+
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Semua History</h1>
+    <div className="p-4 pt-16 sm:p-6 lg:pt-6">
+      <h1 className="text-2xl font-semibold">
+        Semua History
+        {pagination && (
+          <span className="font-medium text-gray-600"> ({pagination.totalCount.toLocaleString("id-ID")} pesanan)</span>
+        )}
+      </h1>
+      <p className="mt-1 mb-6 text-sm text-gray-600">
+        Klik judul kolom untuk mengurutkan pesanan di halaman ini.
+      </p>
 
       <div className="flex gap-4 mb-6">
         <Select value={filterType} onValueChange={handleFilterTypeChange}>
@@ -229,29 +283,23 @@ export function SemuaHistory(props: { orders: Order[]; users: User[] }) {
       </div>
 
       <div className="border rounded-lg">
-        <Table>
+        <Table className="min-w-[960px]">
           <TableHeader>
             <TableRow className="bg-gray-50">
               {/* <TableHead className="font-semibold">Tracking ID</TableHead> */}
-              <TableHead className="font-semibold">Date of Order</TableHead>
-              <TableHead className="font-semibold">Name of Sender</TableHead>
-              <TableHead className="font-semibold">WhatsApp Number</TableHead>
-              <TableHead className="font-semibold">Number of Folders</TableHead>
-              <TableHead className="font-semibold">Order Status</TableHead>
-              <TableHead className="font-semibold">
-                Estimated Delivery
-              </TableHead>
-              <TableHead className="font-semibold">Actions</TableHead>
+              <SortableHeader column={col("uploadDate")}>Date of Order</SortableHeader>
+              <SortableHeader column={col("sender")}>Name of Sender</SortableHeader>
+              <SortableHeader column={col("whatsapp")}>WhatsApp Number</SortableHeader>
+              <SortableHeader column={col("folders")}>Number of Folders</SortableHeader>
+              <SortableHeader column={col("status")}>Order Status</SortableHeader>
+              <SortableHeader column={col("estimatedFinish")}>Estimated Delivery</SortableHeader>
+              <TableHead className="font-semibold text-gray-900">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrders
-              .sort(
-                (a, b) =>
-                  new Date(b.uploadDate).getTime() -
-                  new Date(a.uploadDate).getTime()
-              )
-              .map((order) => (
+            {table
+              .getRowModel()
+              .rows.map(({ original: order }) => (
                 <TableRow key={order._id} className="hover:bg-gray-50">
                   {/* <TableCell>
                     {order.trackingId ? order.trackingId : "Pending"}
@@ -512,6 +560,14 @@ export function SemuaHistory(props: { orders: Order[]; users: User[] }) {
           </TableBody>
         </Table>
       </div>
+
+      {pagination && onPageChange && pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          onPageChange={onPageChange}
+        />
+      )}
     </div>
   );
 }

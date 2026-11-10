@@ -1,15 +1,6 @@
-import { UserButton } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
 
-export default async function UserDashboard() {
-  return (
-    <div>
-      <UserButton />
-      <p>
-        This is the protected user dashboard restricted to users with the `user`
-        role.
-      </p>
-    </div>
-  );
+// Workers land on /user after sign-in; send them straight to their dashboard.
+export default function UserHome() {
+  redirect("/user/dashboard");
 }
-
-//later the admin semua-pesanan will fetch one by one order using the orderId
