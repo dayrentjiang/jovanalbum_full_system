@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SortableHeader } from "@/components/ui/sortable-header";
+import { SortableHeader, SortResetButton, useDefaultSorting } from "@/components/ui/sortable-header";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { DueBadge } from "@/components/dashboard/parts";
 import { Search } from "lucide-react";
@@ -84,6 +84,9 @@ const QUICK_FILTERS: { key: QuickFilter; label: string; test: (r: Row) => boolea
   }
 ];
 
+// Default order: newest upload first.
+const DEFAULT_SORTING: SortingState = [{ id: "upload", desc: true }];
+
 const columnHelper = createColumnHelper<Row>();
 
 const columns = [
@@ -118,7 +121,8 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedFolderId, setExpandedFolderId] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
-  const [sorting, setSorting] = useState<SortingState>([{ id: "upload", desc: true }]);
+  const { sorting, onSortingChange, reset: resetSorting, isDefault: isDefaultSort } =
+    useDefaultSorting(DEFAULT_SORTING);
 
   const processTypes = {
     "Cetak Foto": [
@@ -299,8 +303,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
     data: visibleRows,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
-    enableSortingRemoval: false,
+    onSortingChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getRowId: (r) => r.entry.folder._id
@@ -323,9 +326,12 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
           <h1 className="text-2xl font-semibold">
             Semua Pesanan ({orders.length} folder)
           </h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Klik judul kolom untuk mengurutkan. Klik lagi untuk membalik arah.
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-gray-600">
+              Klik judul kolom untuk mengurutkan. Klik lagi untuk membalik, klik ketiga kali untuk kembali ke urutan awal.
+            </p>
+            <SortResetButton visible={!isDefaultSort} onClick={resetSorting} />
+          </div>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Search className="w-5 h-5 text-gray-500" aria-hidden="true" />

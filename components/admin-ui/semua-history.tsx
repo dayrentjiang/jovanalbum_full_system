@@ -8,7 +8,7 @@ import {
   useReactTable,
   type SortingState
 } from "@tanstack/react-table";
-import { SortableHeader } from "@/components/ui/sortable-header";
+import { SortableHeader, SortResetButton, useDefaultSorting } from "@/components/ui/sortable-header";
 import { Pagination } from "./pagination";
 import {
   Table,
@@ -72,6 +72,9 @@ interface User {
   Orders: Order[];
 }
 
+// Default order: newest order first.
+const DEFAULT_SORTING: SortingState = [{ id: "uploadDate", desc: true }];
+
 const columnHelper = createColumnHelper<Order>();
 
 const STATUS_RANK: Record<string, number> = { pending: 0, new: 0, "on-process": 1, complete: 2, history: 3 };
@@ -96,7 +99,8 @@ export function SemuaHistory(props: {
 }) {
   // Extract props
   const { orders, users, pagination, onPageChange } = props;
-  const [sorting, setSorting] = useState<SortingState>([{ id: "uploadDate", desc: true }]);
+  const { sorting, onSortingChange, reset: resetSorting, isDefault: isDefaultSort } =
+    useDefaultSorting(DEFAULT_SORTING);
 
   // Set up state
   const [filterType, setFilterType] = useState<
@@ -218,8 +222,7 @@ export function SemuaHistory(props: {
     data: filteredOrders,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
-    enableSortingRemoval: false,
+    onSortingChange,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getRowId: (o) => o._id
@@ -234,9 +237,12 @@ export function SemuaHistory(props: {
           <span className="font-medium text-gray-600"> ({pagination.totalCount.toLocaleString("id-ID")} pesanan)</span>
         )}
       </h1>
-      <p className="mt-1 mb-6 text-sm text-gray-600">
-        Klik judul kolom untuk mengurutkan pesanan di halaman ini.
-      </p>
+      <div className="mt-1 mb-6 flex flex-wrap items-center gap-3">
+        <p className="text-sm text-gray-600">
+          Klik judul kolom untuk mengurutkan pesanan di halaman ini. Klik ketiga kali untuk kembali ke urutan awal.
+        </p>
+        <SortResetButton visible={!isDefaultSort} onClick={resetSorting} />
+      </div>
 
       <div className="flex gap-4 mb-6">
         <Select value={filterType} onValueChange={handleFilterTypeChange}>
