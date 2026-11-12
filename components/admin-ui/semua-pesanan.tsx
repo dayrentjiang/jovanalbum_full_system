@@ -44,6 +44,7 @@ import { SortableHeader } from "@/components/ui/sortable-header";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { DueBadge } from "@/components/dashboard/parts";
 import { dueInfo, isInProduction } from "@/lib/orders";
+import type { Worker } from "@/lib/api";
 
 export interface Order {
   _id: string;
@@ -73,12 +74,7 @@ export interface Order {
   workingNotes: string;
 }
 
-interface User {
-  userId: string;
-  firstName: string;
-  LastName: string;
-  Orders: Order[];
-}
+type User = Worker;
 
 type FilterType = "name" | "trackingId" | "phone" | "description";
 type QuickFilter = "all" | "new" | "on-process" | "complete" | "late" | "today";

@@ -44,3 +44,15 @@ export async function fetchWorkerEntries(userId: string): Promise<WorkerEntry[]>
   const data = await getJson<WorkerEntry | WorkerEntry[]>(`${BACKEND_URL}/order/user/${userId}`);
   return (Array.isArray(data) ? data : [data]).filter((e) => e?.order && e?.folder);
 }
+
+export interface Worker {
+  userId: string;
+  firstName: string;
+}
+
+/** Everyone a folder can be assigned to. */
+export async function fetchWorkers(): Promise<Worker[]> {
+  const data = await getJson<unknown>(`${BACKEND_URL}/user`);
+  if (!Array.isArray(data)) throw new Error("Unexpected /user response");
+  return data as Worker[];
+}

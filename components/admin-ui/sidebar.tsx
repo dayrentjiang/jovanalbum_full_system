@@ -16,29 +16,12 @@ import {
 } from "lucide-react";
 import { Avatar } from "@radix-ui/react-avatar";
 import { UserButton } from "@clerk/nextjs";
-import { useEffect } from "react";
-import { BACKEND_URL } from "@/lib/config";
+import { useWorkers } from "@/hooks/use-workers";
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isKaryawanOpen, setIsKaryawanOpen] = useState(false);
-  const [users, setUsers] = useState<{ userId: string; firstName: string }[]>(
-    []
-  );
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/user`);
-        const data = await res.json();
-        setUsers(data);
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      }
-    };
-    fetchUser();
-  }, []);
-  // This would come from your database - example data for now
+  const users = useWorkers();
 
   return (
     <>

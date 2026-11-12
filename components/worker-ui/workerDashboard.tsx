@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { usePolling } from "@/hooks/use-polling";
 import { fetchRecentHistory, fetchWorkerEntries } from "@/lib/api";
-import { BACKEND_URL } from "@/lib/config";
+import { useWorkers } from "@/hooks/use-workers";
 import { computeWorkerMetrics } from "@/lib/dashboard-metrics";
 import { jenisLabel } from "@/lib/orders";
 import {
@@ -32,17 +32,10 @@ function formatDays(d: number | null): string {
 
 export function WorkerDashboard({ userId }: { userId: string }) {
   const { user } = useUser();
-  const [users, setUsers] = useState([]);
+  const users = useWorkers();
 
   const entries = usePolling(useCallback(() => fetchWorkerEntries(userId), [userId]), REFRESH_MS);
   const history = usePolling(useCallback(() => fetchRecentHistory(HISTORY_LIMIT), []), HISTORY_REFRESH_MS);
-
-  useEffect(() => {
-    fetch(`${BACKEND_URL}/user`)
-      .then((res) => res.json())
-      .then(setUsers)
-      .catch((err) => console.error("Error fetching users:", err));
-  }, []);
 
   const metrics = useMemo(() => {
     // Wait for history so "done this week" isn't briefly undercounted.

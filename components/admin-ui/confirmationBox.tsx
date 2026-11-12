@@ -18,7 +18,8 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
+  SelectValue,
+  SelectEmpty
 } from "@/components/ui/select";
 
 interface OrderProps {
@@ -373,6 +374,7 @@ https://jovanalbumsystem.web.app/track/${trackingId}
                       <SelectValue placeholder="Select a worker" />
                     </SelectTrigger>
                     <SelectContent className="bg-white">
+                      {users.length === 0 && <SelectEmpty>Memuat daftar worker…</SelectEmpty>}
                       {users.map((user) => (
                         <SelectItem
                           key={user.userId}
