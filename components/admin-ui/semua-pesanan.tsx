@@ -32,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Check, X, Edit, ChevronDown, Link } from "lucide-react";
+import { Check, X, Edit, ChevronDown, Link, Truck, Banknote } from "lucide-react";
 import { format } from "date-fns";
 import { ConfirmationBox } from "./confirmationBox";
 import { EditBox } from "./editBox";
@@ -43,8 +43,11 @@ import { Pagination } from "./pagination";
 import { SortableHeader, SortResetButton, useDefaultSorting } from "@/components/ui/sortable-header";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { DueBadge } from "@/components/dashboard/parts";
-import { dueInfo, isInProduction } from "@/lib/orders";
+import { dayDiff, dueInfo, isInProduction } from "@/lib/orders";
 import type { Worker } from "@/lib/api";
+import { Checkbox } from "@/components/ui/checkbox";
+import { StatusActionDialog } from "./statusActionDialog";
+import { TipeFilter } from "./tipeFilter";
 
 export interface Order {
   _id: string;
@@ -72,19 +75,28 @@ export interface Order {
   status: string;
   estimatedFinish: Date;
   workingNotes: string;
+  /** When it was marked terkirim (sent, not paid yet). */
+  terkirimAt?: string;
 }
 
 type User = Worker;
 
 type FilterType = "name" | "trackingId" | "phone" | "description";
-type QuickFilter = "all" | "new" | "on-process" | "complete" | "late" | "today";
+type QuickFilter = "all" | "new" | "on-process" | "complete" | "terkirim" | "late" | "today";
 
 const PAGE_SIZE = 50;
 
 // Default order: newest order first.
 const DEFAULT_SORTING: SortingState = [{ id: "uploadDate", desc: true }];
 
-const STATUS_RANK: Record<string, number> = { pending: 0, new: 0, "on-process": 1, complete: 2 };
+const STATUS_RANK: Record<string, number> = { pending: 0, new: 0, "on-process": 1, complete: 2, terkirim: 3 };
+
+/** Siap diambil and Terkirim orders can be marked lunas, alone or in bulk. */
+const canLunas = (o: Order) => o.status === "complete" || o.status === "terkirim";
+
+/** The order's distinct folder types, e.g. ["Kolase", "Magazine"]. */
+const orderTipes = (o: Order): string[] =>
+  [...new Set(o.folders.map((f) => f.tipe?.trim()).filter((t): t is string => !!t))].sort();
 
 const normalizeText = (text: string | undefined) => (text ?? "").toLowerCase().trim();
 const normalizePhone = (phone: string | undefined) => (phone ?? "").replace(/[\s+\-]/g, "").toLowerCase();
@@ -115,6 +127,7 @@ const QUICK_FILTERS: { key: QuickFilter; label: string; test: (o: Order) => bool
   { key: "new", label: "Baru", test: (o) => o.status === "new" || o.status === "pending" },
   { key: "on-process", label: "Dalam proses", test: (o) => o.status === "on-process" },
   { key: "complete", label: "Siap diambil", test: (o) => o.status === "complete" },
+  { key: "terkirim", label: "Terkirim · belum lunas", test: (o) => o.status === "terkirim" },
   { key: "late", label: "Terlambat", test: isLate },
   { key: "today", label: "Deadline hari ini", test: isDueToday }
 ];
@@ -126,6 +139,7 @@ const columns = [
   columnHelper.accessor((o) => o.sender?.name ?? "", { id: "sender" }),
   columnHelper.accessor((o) => o.sender?.whatsapp ?? "", { id: "whatsapp" }),
   columnHelper.accessor((o) => o.folders.length, { id: "folders", sortDescFirst: true }),
+  columnHelper.accessor((o) => orderTipes(o).join(", "), { id: "tipe" }),
   columnHelper.accessor((o) => STATUS_RANK[o.status] ?? 0, { id: "status", sortDescFirst: false }),
   columnHelper.accessor((o) => (o.estimatedFinish ? new Date(o.estimatedFinish).getTime() : undefined), {
     id: "estimatedFinish",
@@ -138,12 +152,17 @@ export function SemuaPesanan(props: {
   orders: Order[];
   users: User[];
   isLoading: boolean;
+  /** Reload orders right away, e.g. after marking some lunas. */
+  onChanged?: () => void;
 }) {
-  const { orders, users } = props;
+  const { orders, users, onChanged } = props;
 
   const [filterType, setFilterType] = useState<FilterType>("name");
   const [filterValue, setFilterValue] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+  const [tipeFilter, setTipeFilter] = useState<string[]>([]);
+  // Ids of ticked orders. Only Siap diambil / Terkirim rows can be ticked.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const { sorting, onSortingChange, reset: resetSortingState, isDefault: isDefaultSort } =
     useDefaultSorting(DEFAULT_SORTING);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE });
@@ -164,15 +183,38 @@ export function SemuaPesanan(props: {
     setPagination((p) => ({ ...p, pageIndex: 0 }));
   };
 
+  const handleTipeFilter = (next: string[]) => {
+    setTipeFilter(next);
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+  };
+
   const chips = useMemo(
     () => QUICK_FILTERS.map((f) => ({ key: f.key, label: f.label, count: orders.filter(f.test).length })),
     [orders]
   );
 
-  const visibleOrders = useMemo(() => {
+  // Orders passing the chip and search filters (before the Tipe filter).
+  const baseOrders = useMemo(() => {
     const test = QUICK_FILTERS.find((f) => f.key === quickFilter)!.test;
     return orders.filter((o) => test(o) && matchesSearch(o, filterType, filterValue));
   }, [orders, quickFilter, filterType, filterValue]);
+
+  const visibleOrders = useMemo(() => {
+    if (tipeFilter.length === 0) return baseOrders;
+    return baseOrders.filter((o) => orderTipes(o).some((t) => tipeFilter.includes(t)));
+  }, [baseOrders, tipeFilter]);
+
+  // Every type in the loaded orders, with counts under the other filters.
+  const tipeOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const o of orders) for (const t of orderTipes(o)) counts.set(t, 0);
+    for (const o of baseOrders) for (const t of orderTipes(o)) counts.set(t, (counts.get(t) ?? 0) + 1);
+    return [...counts].map(([tipe, count]) => ({ tipe, count })).sort((a, b) => a.tipe.localeCompare(b.tipe));
+  }, [orders, baseOrders]);
+
+  // Drop ticks for orders that left the list or can no longer be finished.
+  const selectedOrders = useMemo(() => orders.filter((o) => selected.has(o._id) && canLunas(o)), [orders, selected]);
+  const selectableVisible = useMemo(() => visibleOrders.filter(canLunas), [visibleOrders]);
 
   // TanStack's hook returns functions that the React Compiler cannot memoize.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -211,6 +253,29 @@ export function SemuaPesanan(props: {
   };
 
   const col = (id: string) => table.getColumn(id);
+
+  const pageSelectable = table.getRowModel().rows.map((r) => r.original).filter(canLunas);
+  const pageAllSelected = pageSelectable.length > 0 && pageSelectable.every((o) => selected.has(o._id));
+  const pageSomeSelected = pageSelectable.some((o) => selected.has(o._id));
+  const allVisibleSelected =
+    selectableVisible.length > 0 && selectableVisible.every((o) => selected.has(o._id));
+
+  const setTicked = (ids: string[], ticked: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (ticked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  const clearSelection = () => setSelected(new Set());
+
+  const afterStatusChange = (ids: string[]) => (failedIds: string[]) => {
+    // Keep failed ones ticked so they can be retried.
+    setTicked(ids.filter((id) => !failedIds.includes(id)), false);
+    onChanged?.();
+  };
 
   const handleCompleteButton = async (order: Order) => {
     console.log("Complete button clicked");
@@ -272,7 +337,8 @@ JOVAN ALBUM
 
   const statusClassMap: { [key: string]: string } = {
     "on-process": "bg-yellow-100 text-yellow-800",
-    "complete": "bg-green-100 text-green-800"
+    "complete": "bg-green-100 text-green-800",
+    "terkirim": "bg-orange-100 text-orange-800"
   };
 
   return (
@@ -331,18 +397,55 @@ JOVAN ALBUM
         </div>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <FilterChips chips={chips} value={quickFilter} onChange={handleQuickFilter} />
+        {tipeFilter.length > 0 && (
+          <button
+            type="button"
+            onClick={() => handleTipeFilter([])}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-blue-300 bg-blue-50 px-3.5 text-sm font-medium text-blue-800 hover:bg-blue-100"
+          >
+            Tipe: {tipeFilter.join(", ")}
+            <X className="h-3.5 w-3.5" aria-label="Hapus filter tipe" />
+          </button>
+        )}
       </div>
+
+      {pageAllSelected && !allVisibleSelected && (
+        <div className="mb-2 rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          {pageSelectable.length} pesanan di halaman ini dipilih.{" "}
+          <button
+            type="button"
+            className="font-semibold underline"
+            onClick={() => setTicked(selectableVisible.map((o) => o._id), true)}
+          >
+            Pilih semua {selectableVisible.length} pesanan yang bisa dilunasi di filter ini
+          </button>
+        </div>
+      )}
 
       <div className="border rounded-lg">
         <Table className="min-w-[960px]">
           <TableHeader>
             <TableRow className="bg-gray-50">
+              <TableHead className="w-10">
+                <Checkbox
+                  aria-label="Pilih semua pesanan Siap diambil / Terkirim di halaman ini"
+                  disabled={pageSelectable.length === 0}
+                  checked={pageAllSelected ? true : pageSomeSelected ? "indeterminate" : false}
+                  onCheckedChange={() => setTicked(pageSelectable.map((o) => o._id), !pageAllSelected)}
+                />
+              </TableHead>
               <SortableHeader column={col("uploadDate")}>Date of Order</SortableHeader>
               <SortableHeader column={col("sender")}>Name of Sender</SortableHeader>
               <SortableHeader column={col("whatsapp")}>WhatsApp Number</SortableHeader>
               <SortableHeader column={col("folders")}>Number of Folders</SortableHeader>
+              <SortableHeader
+                column={col("tipe")}
+                actions={<TipeFilter options={tipeOptions} value={tipeFilter} onChange={handleTipeFilter} />}
+              >
+                Tipe
+              </SortableHeader>
               <SortableHeader column={col("status")}>Order Status</SortableHeader>
               <SortableHeader column={col("estimatedFinish")}>Estimated Delivery</SortableHeader>
               <TableHead className="font-semibold text-gray-900">Actions</TableHead>
@@ -351,7 +454,7 @@ JOVAN ALBUM
           <TableBody>
             {table.getRowModel().rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-gray-500">
+                <TableCell colSpan={9} className="py-10 text-center text-gray-500">
                   {props.isLoading && orders.length === 0
                     ? "Memuat pesanan…"
                     : "Tidak ada pesanan yang cocok dengan filter ini."}
@@ -359,7 +462,19 @@ JOVAN ALBUM
               </TableRow>
             )}
             {table.getRowModel().rows.map(({ original: order }) => (
-              <TableRow key={order._id} className="hover:bg-gray-50">
+              <TableRow
+                key={order._id}
+                className={selected.has(order._id) && canLunas(order) ? "bg-blue-50/60 hover:bg-blue-50" : "hover:bg-gray-50"}
+              >
+                <TableCell>
+                  {canLunas(order) && (
+                    <Checkbox
+                      aria-label={`Pilih ${order.sender.name}`}
+                      checked={selected.has(order._id)}
+                      onCheckedChange={(v) => setTicked([order._id], v === true)}
+                    />
+                  )}
+                </TableCell>
                 {/* <TableCell>
                     {order.trackingId ? order.trackingId : "Pending"}
                   </TableCell> */}
@@ -534,6 +649,9 @@ JOVAN ALBUM
                     </PopoverContent>
                   </Popover>
                 </TableCell>
+                <TableCell className="max-w-[180px] text-sm">
+                  {orderTipes(order).join(", ") || <span className="text-gray-400">–</span>}
+                </TableCell>
                 <TableCell>
                   <div>
                     <span
@@ -544,6 +662,12 @@ JOVAN ALBUM
                     >
                       {order.status}
                     </span>
+                    {order.status === "terkirim" && (
+                      <span className="mt-1 block text-[11px] text-orange-800">
+                        belum lunas
+                        {order.terkirimAt && ` · ${Math.max(0, dayDiff(new Date(order.terkirimAt), new Date()))} hari`}
+                      </span>
+                    )}
                     {(() => {
                       const allFoldersComplete = order.folders.every((folder) =>
                         folder.stepChecklist
@@ -558,7 +682,7 @@ JOVAN ALBUM
                       return (
                         <>
                           {allFoldersComplete &&
-                            order.status !== "complete" && (
+                            isInProduction(order) && (
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -611,22 +735,39 @@ JOVAN ALBUM
                       </div>
                     ) : null}
 
-                    {order.status === "complete" ? (
-                      <div>
-                        <ConfirmationBox
-                          button={
-                            <button className="p-1 hover:bg-gray-100 rounded">
-                              <Check className="h-4 w-4 text-green-800" />
-                            </button>
-                          }
-                          order={[order]}
-                          description="Are you sure you want to finish this order?"
-                          text={"Finish"}
-                          buttonText="Finish"
-                          users={users}
-                        />
-                      </div>
-                    ) : null}
+                    {order.status === "complete" && (
+                      <StatusActionDialog
+                        action="terkirim"
+                        orders={[order]}
+                        onDone={afterStatusChange([order._id])}
+                        trigger={
+                          <button
+                            className="p-1 hover:bg-orange-50 rounded"
+                            title="Tandai terkirim (belum lunas)"
+                            aria-label={`Tandai terkirim: ${order.sender.name}`}
+                          >
+                            <Truck className="h-4 w-4 text-orange-600" />
+                          </button>
+                        }
+                      />
+                    )}
+
+                    {canLunas(order) && (
+                      <StatusActionDialog
+                        action="lunas"
+                        orders={[order]}
+                        onDone={afterStatusChange([order._id])}
+                        trigger={
+                          <button
+                            className="p-1 hover:bg-green-50 rounded"
+                            title="Tandai lunas (selesai, pindah ke History)"
+                            aria-label={`Tandai lunas: ${order.sender.name}`}
+                          >
+                            <Banknote className="h-4 w-4 text-green-700" />
+                          </button>
+                        }
+                      />
+                    )}
 
                     <div>
                       <ConfirmationBox
@@ -671,6 +812,26 @@ JOVAN ALBUM
       <p className="mt-2 text-center text-xs text-gray-600">
         Menampilkan {table.getRowModel().rows.length} dari {visibleOrders.length} pesanan
       </p>
+
+      {selectedOrders.length > 0 && (
+        <div className="sticky bottom-4 z-40 mx-auto mt-4 flex w-fit max-w-full flex-wrap items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 shadow-lg">
+          <span className="text-sm font-medium">{selectedOrders.length} dipilih</span>
+          <StatusActionDialog
+            action="lunas"
+            orders={selectedOrders}
+            onDone={afterStatusChange(selectedOrders.map((o) => o._id))}
+            trigger={
+              <Button size="sm" className="rounded-full bg-green-600 text-white hover:bg-green-700">
+                <Banknote className="mr-1.5 h-4 w-4" />
+                Tandai lunas
+              </Button>
+            }
+          />
+          <Button size="sm" variant="ghost" className="rounded-full" onClick={clearSelection}>
+            Batal
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

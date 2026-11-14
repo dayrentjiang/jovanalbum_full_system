@@ -43,7 +43,7 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <SemuaPesanan orders={orders} users={users} isLoading={isLoading} />
+      <SemuaPesanan orders={orders} users={users} isLoading={isLoading} onChanged={fetchData} />
     </div>
   );
 }

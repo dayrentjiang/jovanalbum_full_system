@@ -1,7 +1,8 @@
 import { BACKEND_URL } from "./config";
 import type { OrderRecord, WorkerEntry } from "./orders";
 
-export const ACTIVE_STATUSES = "pending,new,on-process,complete";
+// "terkirim" = sent to the customer but not paid yet, so it stays active.
+export const ACTIVE_STATUSES = "pending,new,on-process,complete,terkirim";
 
 interface PaginatedResponse {
   success: boolean;
@@ -55,4 +56,37 @@ export async function fetchWorkers(): Promise<Worker[]> {
   const data = await getJson<unknown>(`${BACKEND_URL}/user`);
   if (!Array.isArray(data)) throw new Error("Unexpected /user response");
   return data as Worker[];
+}
+
+async function sendJson<T>(method: "PATCH" | "POST", path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.message || detail?.error || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
+
+/** Siap diambil → Terkirim (sent, not paid yet). */
+export async function markTerkirim(ids: string[]): Promise<void> {
+  await sendJson("PATCH", "/order/terkirim", { ids });
+}
+
+export interface LunasResult {
+  id: string;
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Paid: the backend moves each order's Drive folder to the trash and the order
+ * to History. Returns one result per id; some can fail while others succeed.
+ */
+export async function markLunas(ids: string[]): Promise<LunasResult[]> {
+  const data = await sendJson<{ results: LunasResult[] }>("POST", "/order/lunas", { ids });
+  return data.results;
 }
