@@ -40,7 +40,7 @@ import { EstimatedDeliveryBox } from "./estimatedFinishBox";
 import FileDownloader from "./downloader/fileDownloader";
 import DownloadNotifications from "./downloader/downloadNotifications";
 import { Pagination } from "./pagination";
-import { SortableHeader } from "@/components/ui/sortable-header";
+import { SortableHeader, SortResetButton, useDefaultSorting } from "@/components/ui/sortable-header";
 import { FilterChips } from "@/components/ui/filter-chips";
 import { DueBadge } from "@/components/dashboard/parts";
 import { dueInfo, isInProduction } from "@/lib/orders";
@@ -80,6 +80,9 @@ type FilterType = "name" | "trackingId" | "phone" | "description";
 type QuickFilter = "all" | "new" | "on-process" | "complete" | "late" | "today";
 
 const PAGE_SIZE = 50;
+
+// Default order: newest order first.
+const DEFAULT_SORTING: SortingState = [{ id: "uploadDate", desc: true }];
 
 const STATUS_RANK: Record<string, number> = { pending: 0, new: 0, "on-process": 1, complete: 2 };
 
@@ -141,7 +144,8 @@ export function SemuaPesanan(props: {
   const [filterType, setFilterType] = useState<FilterType>("name");
   const [filterValue, setFilterValue] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
-  const [sorting, setSorting] = useState<SortingState>([{ id: "uploadDate", desc: true }]);
+  const { sorting, onSortingChange, reset: resetSortingState, isDefault: isDefaultSort } =
+    useDefaultSorting(DEFAULT_SORTING);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE });
 
   const handleFilter = (value: string) => {
@@ -177,13 +181,12 @@ export function SemuaPesanan(props: {
     columns,
     state: { sorting, pagination },
     onSortingChange: (updater) => {
-      setSorting(updater);
+      onSortingChange(updater);
       setPagination((p) => ({ ...p, pageIndex: 0 }));
     },
     onPaginationChange: setPagination,
     // Data refreshes every few seconds; don't jump back to page 1 each time.
     autoResetPageIndex: false,
-    enableSortingRemoval: false,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -197,6 +200,11 @@ export function SemuaPesanan(props: {
       setPagination((p) => ({ ...p, pageIndex: pageCount - 1 }));
     }
   }, [pageCount, pagination.pageIndex]);
+
+  const resetSorting = () => {
+    resetSortingState();
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+  };
 
   const handlePageChange = (page: number) => {
     setPagination((p) => ({ ...p, pageIndex: page - 1 }));
@@ -272,9 +280,12 @@ JOVAN ALBUM
       <h1 className="text-2xl font-semibold">
         Semua Pesanan <span className="font-medium text-gray-600">({orders.length} pesanan)</span>
       </h1>
-      <p className="mt-1 mb-6 text-sm text-gray-600">
-        Klik judul kolom untuk mengurutkan. Klik lagi untuk membalik arah.
-      </p>
+      <div className="mt-1 mb-6 flex flex-wrap items-center gap-3">
+        <p className="text-sm text-gray-600">
+          Klik judul kolom untuk mengurutkan. Klik lagi untuk membalik, klik ketiga kali untuk kembali ke urutan awal.
+        </p>
+        <SortResetButton visible={!isDefaultSort} onClick={resetSorting} />
+      </div>
 
       <div className="flex flex-wrap gap-4 mb-4">
         <Select value={filterType} onValueChange={handleFilterTypeChange}>
