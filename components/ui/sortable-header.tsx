@@ -50,10 +50,12 @@ interface SortableHeaderProps<T> {
   column: Column<T, unknown> | undefined;
   children: React.ReactNode;
   className?: string;
+  /** Extra controls after the label, e.g. a filter button. */
+  actions?: React.ReactNode;
 }
 
 /** A table header that sorts its TanStack column on click (asc ⇄ desc). */
-export function SortableHeader<T>({ column, children, className }: SortableHeaderProps<T>) {
+export function SortableHeader<T>({ column, children, className, actions }: SortableHeaderProps<T>) {
   if (!column) return <TableHead className={cn("font-semibold", className)}>{children}</TableHead>;
 
   const sorted = column.getIsSorted();
@@ -76,6 +78,7 @@ export function SortableHeader<T>({ column, children, className }: SortableHeade
         {children}
         <Icon className={cn("h-3.5 w-3.5 shrink-0", sorted ? "text-blue-700" : "text-gray-400")} aria-hidden="true" />
       </button>
+      {actions}
     </TableHead>
   );
 }
