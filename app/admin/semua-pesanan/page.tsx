@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { SemuaPesanan, type Order } from "@/components/admin-ui/semua-pesanan";
-import { BACKEND_URL } from "@/lib/config";
 import { fetchAllOrders } from "@/lib/api";
+import { useWorkers } from "@/hooks/use-workers";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [users, setUsers] = useState([]);
+  const users = useWorkers();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -27,19 +27,7 @@ export default function OrdersPage() {
   }, []);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/user`);
-        const data = await res.json();
-        setUsers(data);
-      } catch (error) {
-        setError("Error fetching user");
-        console.error("Error fetching user:", error);
-      }
-    };
-
     fetchData();
-    fetchUser();
 
     // Set interval for auto-refresh
     const interval = setInterval(() => {

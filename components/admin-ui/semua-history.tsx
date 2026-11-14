@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import type { Worker } from "@/lib/api";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -65,12 +66,7 @@ export interface Order {
   workingNotes: string;
 }
 
-interface User {
-  userId: string;
-  firstName: string;
-  LastName: string;
-  Orders: Order[];
-}
+type User = Worker;
 
 // Default order: newest order first.
 const DEFAULT_SORTING: SortingState = [{ id: "uploadDate", desc: true }];

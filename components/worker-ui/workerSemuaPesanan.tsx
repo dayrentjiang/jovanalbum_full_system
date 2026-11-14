@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useWorkers } from "@/hooks/use-workers";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -115,7 +116,7 @@ const columns = [
 
 export function WorkerSemuaPesanan(props: { userId: string }) {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [users, setUsers] = useState([]);
+  const users = useWorkers();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -203,20 +204,6 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
     }
   };
 
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch(
-        "https://jovanalbum-system-backend.onrender.com/user"
-      );
-      const data = await res.json();
-      setUsers(data);
-      setError(null);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      setError("Failed to load users");
-    }
-  };
-
   const assignChecklistToFolder = async (
     folderId: string,
     checklist: string[]
@@ -251,7 +238,7 @@ export function WorkerSemuaPesanan(props: { userId: string }) {
   useEffect(() => {
     const initialFetch = async () => {
       setIsLoading(true);
-      await Promise.all([fetchOrders(), fetchUsers()]);
+      await fetchOrders();
       setIsLoading(false);
     };
     initialFetch();

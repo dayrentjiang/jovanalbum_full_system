@@ -15,7 +15,8 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
+  SelectValue,
+  SelectEmpty
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -246,6 +247,7 @@ const WorkerConfirmationBox: React.FC<ChecklistConfirmationDialogProps> = ({
                 <SelectValue placeholder="Select a user" />
               </SelectTrigger>
               <SelectContent className="bg-white">
+                {users.length === 0 && <SelectEmpty>Memuat daftar worker…</SelectEmpty>}
                 {users.map((user) => (
                   <SelectItem key={user.userId} value={user.userId}>
                     {user.firstName}

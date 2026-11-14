@@ -19,7 +19,8 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
+  SelectValue,
+  SelectEmpty
 } from "@/components/ui/select";
 
 interface EditBoxProps {
@@ -395,6 +396,7 @@ Track Pesanan mu disini: https://jovanalbumsystem.web.app/track/${trackingId}
                       <SelectValue placeholder="Select an assignee" />
                     </SelectTrigger>
                     <SelectContent className="bg-white">
+                      {props.users.length === 0 && <SelectEmpty>Memuat daftar worker…</SelectEmpty>}
                       {props.users.map((user) => (
                         <SelectItem key={user.userId} value={user.userId}>
                           {user.firstName}

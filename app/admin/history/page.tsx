@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SemuaHistory } from "@/components/admin-ui/semua-history";
 import { BACKEND_URL } from "@/lib/config";
+import { useWorkers } from "@/hooks/use-workers";
 
 function OrdersHistoryPageContent() {
   const [orders, setOrders] = useState([]);
-  const [users, setUsers] = useState([]);
+  const users = useWorkers();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pagination, setPagination] = useState({
@@ -64,19 +65,7 @@ function OrdersHistoryPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/user`);
-        const data = await res.json();
-        setUsers(data);
-      } catch (error) {
-        setError("Error fetching user");
-        console.error("Error fetching user:", error);
-      }
-    };
-
     fetchData();
-    fetchUser();
 
     // Set interval for auto-refresh
     const interval = setInterval(() => {

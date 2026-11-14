@@ -133,6 +133,11 @@ const SelectItem = React.forwardRef<
 ))
 SelectItem.displayName = SelectPrimitive.Item.displayName
 
+/** Shown inside SelectContent when there is nothing to pick (yet). */
+function SelectEmpty({ children }: { children: React.ReactNode }) {
+  return <div className="px-2 py-1.5 text-sm text-gray-500">{children}</div>
+}
+
 const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>
@@ -154,6 +159,7 @@ export {
   SelectLabel,
   SelectItem,
   SelectSeparator,
+  SelectEmpty,
   SelectScrollUpButton,
   SelectScrollDownButton,
 }
